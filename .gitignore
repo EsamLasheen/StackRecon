@@ -1,3 +1,9 @@
+# Internal tooling (not for public repo)
+.claude/
+.specify/
+specs/
+CLAUDE.md
+
 # Python
 __pycache__/
 *.pyc
