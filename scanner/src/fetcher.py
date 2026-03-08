@@ -36,9 +36,7 @@ async def fetch_chaos_index(
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(CHAOS_GITHUB_URL, headers=headers)
             if resp.status_code != 200:
-                raise SourceUnavailableError(
-                    f"Chaos source returned HTTP {resp.status_code}"
-                )
+                raise SourceUnavailableError(f"Chaos source returned HTTP {resp.status_code}")
             data = resp.json()
     except httpx.HTTPError as exc:
         raise SourceUnavailableError(f"Chaos source unreachable: {exc}") from exc

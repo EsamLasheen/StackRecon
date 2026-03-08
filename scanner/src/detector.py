@@ -14,6 +14,7 @@ import yaml
 # Signature loading
 # ---------------------------------------------------------------------------
 
+
 def load_signatures(path: str | Path) -> list[dict[str, Any]]:
     """Load technology signatures from a YAML file.
 
@@ -31,6 +32,7 @@ def load_signatures(path: str | Path) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 # Offline detection (header + HTML body matching)
 # ---------------------------------------------------------------------------
+
 
 def detect_offline(
     headers: dict[str, str],
@@ -106,6 +108,7 @@ def detect_offline(
 # ---------------------------------------------------------------------------
 # Live HTTP probe
 # ---------------------------------------------------------------------------
+
 
 async def probe_subdomain(
     hostname: str,
@@ -187,6 +190,7 @@ async def probe_subdomain(
 # ---------------------------------------------------------------------------
 # Batch detection with worker pool
 # ---------------------------------------------------------------------------
+
 
 async def detect_all(
     hostnames: list[str],

@@ -35,8 +35,22 @@ def _hostnames_for_program(entry: dict) -> list[str]:
             if host:
                 domains = [host]
 
-    prefixes = ["", "www", "api", "app", "admin", "portal", "dev", "staging",
-                "grafana", "jenkins", "gitlab", "jira", "confluence", "monitor"]
+    prefixes = [
+        "",
+        "www",
+        "api",
+        "app",
+        "admin",
+        "portal",
+        "dev",
+        "staging",
+        "grafana",
+        "jenkins",
+        "gitlab",
+        "jira",
+        "confluence",
+        "monitor",
+    ]
 
     for domain in domains:
         domain = domain.strip().lower()
@@ -119,17 +133,19 @@ async def run(config) -> int:
             for d in detections
         ]
 
-        programs_out.append({
-            "name": name,
-            "url": url,
-            "platform": platform,
-            "reward_type": reward_type,
-            "domains": domains,
-            "technologies": sorted(tech_set),
-            "subdomain_count": subdomain_count,
-            "detection_count": detection_count,
-            "detections": detections_out,
-        })
+        programs_out.append(
+            {
+                "name": name,
+                "url": url,
+                "platform": platform,
+                "reward_type": reward_type,
+                "domains": domains,
+                "technologies": sorted(tech_set),
+                "subdomain_count": subdomain_count,
+                "detection_count": detection_count,
+                "detections": detections_out,
+            }
+        )
 
         ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
         print(  # noqa: E501
@@ -140,9 +156,7 @@ async def run(config) -> int:
     data = {
         "meta": {
             "generated_at": (
-                datetime.datetime.now(datetime.timezone.utc)
-                .isoformat()
-                .replace("+00:00", "Z")
+                datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
             ),
             "programs_scanned": len(programs_out),
             "programs_failed": programs_failed,
