@@ -28,19 +28,24 @@ jobs:
           python-version: "3.11"
           cache: pip
 
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: pip install -r scanner/requirements.txt
+
+      - name: Install httpx binary
+        run: |
+          go install github.com/projectdiscovery/httpx/cmd/httpx@latest
+          echo "$HOME/go/bin" >> $GITHUB_PATH
 
       - name: Run scanner
         run: |
           if [ -n "${{ github.event.inputs.limit }}" ]; then
             python3 -m scanner.main \
               --limit ${{ github.event.inputs.limit }} \
-              --workers 50 \
+              --workers 100 \
               --output docs/data/data.json
           else
             python3 -m scanner.main \
-              --workers 50 \
+              --workers 100 \
               --output docs/data/data.json
           fi
 

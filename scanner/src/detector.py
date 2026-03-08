@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import re
+import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -106,7 +109,89 @@ def detect_offline(
 
 
 # ---------------------------------------------------------------------------
-# Live HTTP probe
+# httpx binary detection (primary path — Wappalyzer fingerprints, 1400+ techs)
+# ---------------------------------------------------------------------------
+
+
+def run_httpx_binary(
+    hostnames: list[str],
+    threads: int = 50,
+    timeout: int = 10,
+) -> list[dict[str, Any]]:
+    """Run the projectdiscovery/httpx binary with Wappalyzer tech detection.
+
+    Requires the `httpx` binary to be installed and on PATH.
+
+    Args:
+        hostnames: Bare hostnames to probe (no scheme).
+        threads:   Concurrent worker threads.
+        timeout:   Per-request timeout in seconds.
+
+    Returns:
+        List of detection dicts for hosts where at least one tech was detected.
+        Each dict has: hostname, technologies, http_status, probe_error.
+    """
+    if not hostnames:
+        return []
+
+    tmpfile = Path(tempfile.mktemp(suffix=".txt"))
+    try:
+        tmpfile.write_text("\n".join(hostnames) + "\n", encoding="utf-8")
+
+        result = subprocess.run(
+            [
+                "httpx",
+                "-l",
+                str(tmpfile),
+                "-tech-detect",
+                "-json",
+                "-silent",
+                "-no-color",
+                "-threads",
+                str(threads),
+                "-timeout",
+                str(timeout),
+                "-follow-redirects",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=7200,  # 2-hour hard cap for large scans
+        )
+
+        detections: list[dict[str, Any]] = []
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                data = json.loads(line)
+                techs = data.get("tech", [])
+                if not techs:
+                    continue
+                # Strip version numbers: "Nginx:1.18.0" -> "Nginx"
+                clean_techs = [t.split(":")[0] for t in techs]
+                # Prefer 'input' field (original hostname); fall back to parsed url
+                host = data.get("input", data.get("url", ""))
+                if "://" in host:
+                    host = host.split("://", 1)[1].split("/")[0]
+                detections.append(
+                    {
+                        "hostname": host,
+                        "technologies": clean_techs,
+                        "http_status": data.get("status-code"),
+                        "probe_error": None,
+                    }
+                )
+            except json.JSONDecodeError:
+                continue
+
+        return detections
+    finally:
+        tmpfile.unlink(missing_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# Live HTTP probe (legacy / test fallback)
 # ---------------------------------------------------------------------------
 
 
@@ -188,7 +273,7 @@ async def probe_subdomain(
 
 
 # ---------------------------------------------------------------------------
-# Batch detection with worker pool
+# Batch detection with worker pool (legacy / test fallback)
 # ---------------------------------------------------------------------------
 
 

@@ -5,17 +5,15 @@ from __future__ import annotations
 import asyncio
 import datetime
 import sys
-from pathlib import Path
 from urllib.parse import urlparse
 
 from scanner.src.classifier import classify_platform, classify_reward_type
 from scanner.src.config import parse_cli_args
-from scanner.src.detector import detect_all, load_signatures
+from scanner.src.detector import run_httpx_binary
 from scanner.src.fetcher import SourceUnavailableError, fetch_chaos_index
 from scanner.src.writer import write_atomic
 
-SIGNATURES_PATH = Path(__file__).parent.parent / "signatures" / "technologies.yaml"
-SCANNER_VERSION = "1.0.0"
+SCANNER_VERSION = "2.0.0"
 
 
 def _hostnames_for_program(entry: dict) -> list[str]:
@@ -69,12 +67,6 @@ async def run(config) -> int:
     Returns:
         Exit code: 0=success, 1=source unavailable, 3=disk error.
     """
-    try:
-        signatures = load_signatures(SIGNATURES_PATH)
-    except Exception as exc:
-        print(f"[ERROR] Failed to load signatures: {exc}", file=sys.stderr)
-        return 1
-
     print("Fetching Chaos program index…")
     try:
         index = await fetch_chaos_index(api_key=config.api_key, limit=config.limit)
@@ -83,44 +75,74 @@ async def run(config) -> int:
         return 1
 
     total = len(index)
-    print(f"Processing {total} programs with {config.workers} workers…")
+    print(f"Loaded {total} programs.")
 
-    programs_out: list[dict] = []
-    programs_failed = 0
-    total_probed = 0
-    total_detections = 0
+    # Build per-program metadata and collect all unique hostnames
+    program_meta: list[dict] = []
+    all_hostnames: list[str] = []
+    seen: set[str] = set()
 
-    for idx, entry in enumerate(index, start=1):
-        name = entry.get("name", f"program-{idx}")
+    for entry in index:
+        name = entry.get("name", "unknown")
         url = entry.get("url", "")
         bounty = entry.get("bounty", False)
         domains = entry.get("domains", [])
 
-        # Skip programs with no domains and no url
         if not domains and not url:
-            programs_failed += 1
+            program_meta.append(None)  # type: ignore[arg-type]
             continue
 
         platform = classify_platform(url)
         reward_type = classify_reward_type(bounty=bounty, url=url)
-
         hostnames = _hostnames_for_program(entry)
-        subdomain_count = len(hostnames)
-        total_probed += subdomain_count
 
-        detections = await detect_all(
-            hostnames=hostnames,
-            signatures=signatures,
-            workers=config.workers,
-            connect_timeout=config.connect_timeout,
-            read_timeout=config.read_timeout,
+        program_meta.append(
+            {
+                "name": name,
+                "url": url,
+                "platform": platform,
+                "reward_type": reward_type,
+                "domains": domains,
+                "hostnames": hostnames,
+            }
         )
 
-        detection_count = len(detections)
-        total_detections += detection_count
+        for h in hostnames:
+            if h not in seen:
+                all_hostnames.append(h)
+                seen.add(h)
+
+    total_probed = len(all_hostnames)
+    print(
+        f"Running httpx tech-detect on {total_probed} unique hostnames "
+        f"({config.workers} threads)…"
+    )
+
+    raw_detections = run_httpx_binary(
+        hostnames=all_hostnames,
+        threads=config.workers,
+        timeout=config.connect_timeout + config.read_timeout,
+    )
+
+    # Build hostname → detection lookup
+    detection_map: dict[str, dict] = {d["hostname"]: d for d in raw_detections}
+    total_detections = len(raw_detections)
+
+    print(f"httpx finished — {total_detections} hosts with detections.")
+
+    # Assemble per-program output
+    programs_out: list[dict] = []
+    programs_failed = 0
+
+    for meta in program_meta:
+        if meta is None:
+            programs_failed += 1
+            continue
+
+        prog_detections = [detection_map[h] for h in meta["hostnames"] if h in detection_map]
 
         tech_set: set[str] = set()
-        for det in detections:
+        for det in prog_detections:
             tech_set.update(det.get("technologies", []))
 
         detections_out = [
@@ -130,27 +152,21 @@ async def run(config) -> int:
                 "http_status": d.get("http_status"),
                 "probe_error": d.get("probe_error"),
             }
-            for d in detections
+            for d in prog_detections
         ]
 
         programs_out.append(
             {
-                "name": name,
-                "url": url,
-                "platform": platform,
-                "reward_type": reward_type,
-                "domains": domains,
+                "name": meta["name"],
+                "url": meta["url"],
+                "platform": meta["platform"],
+                "reward_type": meta["reward_type"],
+                "domains": meta["domains"],
                 "technologies": sorted(tech_set),
-                "subdomain_count": subdomain_count,
-                "detection_count": detection_count,
+                "subdomain_count": len(meta["hostnames"]),
+                "detection_count": len(prog_detections),
                 "detections": detections_out,
             }
-        )
-
-        ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-        print(  # noqa: E501
-            f"[{ts}] [{idx}/{total}] {name} — "
-            f"{subdomain_count} probed, {detection_count} detections"
         )
 
     data = {

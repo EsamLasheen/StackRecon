@@ -197,7 +197,7 @@ function fetchData() {
   resultsContainer.innerHTML = "";
   resultsContainer.appendChild(C("LoadingSpinner")("Fetching program data…"));
 
-  fetch(DATA_URL)
+  return fetch(DATA_URL)
     .then(function (resp) {
       if (!resp.ok) throw new Error("HTTP " + resp.status);
       return resp.json();
@@ -207,6 +207,7 @@ function fetchData() {
       buildIndices(window.stackrecon.programs);
       initTechDropdown(window.stackrecon.programs);
       setLastUpdated(data.meta);
+      lastGeneratedAt = data.meta && data.meta.generated_at || null;
 
       var totals = computeTotals(window.stackrecon.programs);
       // Use meta counts if available, fall back to computed
@@ -271,6 +272,41 @@ function initCopyAllBanner() {
   }
 }
 
+// ---- Auto-refresh ----------------------------------------------------------
+
+var lastGeneratedAt = null;
+var REFRESH_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+
+function checkForUpdates() {
+  fetch(DATA_URL, { cache: "no-store" })
+    .then(function (resp) {
+      if (!resp.ok) return;
+      return resp.json();
+    })
+    .then(function (data) {
+      if (!data || !data.meta) return;
+      var newGenerated = data.meta.generated_at;
+      if (lastGeneratedAt && newGenerated !== lastGeneratedAt) {
+        // New data available — reload silently
+        window.stackrecon.programs = data.programs || [];
+        buildIndices(window.stackrecon.programs);
+
+        // Rebuild tech dropdown
+        while (techSelect.options.length > 1) techSelect.remove(1);
+        initTechDropdown(window.stackrecon.programs);
+
+        setLastUpdated(data.meta);
+        var totals = computeTotals(window.stackrecon.programs);
+        var programCount   = (data.meta && data.meta.programs_scanned) || window.stackrecon.programs.length;
+        var detectionCount = (data.meta && data.meta.total_detections) || totals.detections;
+        updateHeaderStats(programCount, detectionCount, totals.techs);
+        applyFilters();
+      }
+      lastGeneratedAt = newGenerated;
+    })
+    .catch(function () {});
+}
+
 // ---- Bootstrap -------------------------------------------------------------
 
 document.addEventListener("DOMContentLoaded", function () {
@@ -284,5 +320,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
   wireControls();
   initCopyAllBanner();
-  fetchData();
+  fetchData().then(function () {
+    // Start auto-refresh after initial load
+    setInterval(checkForUpdates, REFRESH_INTERVAL_MS);
+  });
 });
