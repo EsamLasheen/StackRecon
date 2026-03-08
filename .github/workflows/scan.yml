@@ -5,10 +5,9 @@ on:
     # Every Sunday at 02:00 UTC
     - cron: "0 2 * * 0"
   workflow_dispatch:
-    # Allow manual trigger from GitHub UI (Actions tab → "Run workflow")
     inputs:
       limit:
-        description: "Max programs to scan (leave empty for all)"
+        description: "Max programs to scan (leave empty for all ~800)"
         required: false
         default: ""
 
@@ -18,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: write  # needed to commit data.json back to repo
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -35,9 +34,14 @@ jobs:
       - name: Run scanner
         run: |
           if [ -n "${{ github.event.inputs.limit }}" ]; then
-            python3 -m scanner.main --limit ${{ github.event.inputs.limit }} --output docs/data/data.json
+            python3 -m scanner.main \
+              --limit ${{ github.event.inputs.limit }} \
+              --workers 50 \
+              --output docs/data/data.json
           else
-            python3 -m scanner.main --output docs/data/data.json
+            python3 -m scanner.main \
+              --workers 50 \
+              --output docs/data/data.json
           fi
 
       - name: Commit updated data.json
@@ -45,5 +49,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -f docs/data/data.json
-          git diff --cached --quiet || git commit -m "chore: update scan data [$(date -u '+%Y-%m-%d')]"
+          git diff --cached --quiet && echo "No changes to commit" || \
+            git commit -m "data: update scan results [$(date -u '+%Y-%m-%d')]"
           git push

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import httpx
 
-
 CHAOS_GITHUB_URL = (
     "https://raw.githubusercontent.com/projectdiscovery/"
     "public-bugbounty-programs/main/chaos-bugbounty-list.json"

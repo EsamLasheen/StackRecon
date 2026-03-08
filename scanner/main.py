@@ -6,16 +6,47 @@ import asyncio
 import datetime
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 from scanner.src.classifier import classify_platform, classify_reward_type
 from scanner.src.config import parse_cli_args
 from scanner.src.detector import detect_all, load_signatures
-from scanner.src.extractor import extract_subdomains
-from scanner.src.fetcher import SourceUnavailableError, download_zip, fetch_chaos_index
+from scanner.src.fetcher import SourceUnavailableError, fetch_chaos_index
 from scanner.src.writer import write_atomic
 
 SIGNATURES_PATH = Path(__file__).parent.parent / "signatures" / "technologies.yaml"
 SCANNER_VERSION = "1.0.0"
+
+
+def _hostnames_for_program(entry: dict) -> list[str]:
+    """Build a list of hostnames to probe from a Chaos program entry.
+
+    Tries domains list first; falls back to parsing the program URL host.
+    Generates common subdomain prefixes for each root domain.
+    """
+    hostnames: list[str] = []
+    domains = entry.get("domains", [])
+
+    # If no domains, extract from url
+    if not domains:
+        url = entry.get("url", "")
+        if url:
+            host = urlparse(url).hostname or ""
+            if host:
+                domains = [host]
+
+    prefixes = ["", "www", "api", "app", "admin", "portal", "dev", "staging",
+                "grafana", "jenkins", "gitlab", "jira", "confluence", "monitor"]
+
+    for domain in domains:
+        domain = domain.strip().lower()
+        if not domain:
+            continue
+        for prefix in prefixes:
+            hostname = f"{prefix}.{domain}" if prefix else domain
+            hostnames.append(hostname)
+
+    return list(dict.fromkeys(hostnames))  # deduplicate, preserve order
 
 
 async def run(config) -> int:
@@ -24,14 +55,12 @@ async def run(config) -> int:
     Returns:
         Exit code: 0=success, 1=source unavailable, 3=disk error.
     """
-    # Load signatures once
     try:
         signatures = load_signatures(SIGNATURES_PATH)
     except Exception as exc:
         print(f"[ERROR] Failed to load signatures: {exc}", file=sys.stderr)
         return 1
 
-    # Fetch Chaos index
     print("Fetching Chaos program index…")
     try:
         index = await fetch_chaos_index(api_key=config.api_key, limit=config.limit)
@@ -52,28 +81,21 @@ async def run(config) -> int:
         url = entry.get("url", "")
         bounty = entry.get("bounty", False)
         domains = entry.get("domains", [])
-        zip_url = entry.get("program_url", "")
+
+        # Skip programs with no domains and no url
+        if not domains and not url:
+            programs_failed += 1
+            continue
 
         platform = classify_platform(url)
         reward_type = classify_reward_type(bounty=bounty, url=url)
 
-        # Download ZIP
-        zip_bytes: bytes | None = None
-        if zip_url:
-            zip_bytes = await download_zip(zip_url)
-        if zip_bytes is None:
-            print(f"[WARN] {name}: ZIP unavailable — skipping", file=sys.stderr)
-            programs_failed += 1
-            continue
-
-        # Extract subdomains
-        subdomains = extract_subdomains(zip_bytes)
-        subdomain_count = len(subdomains)
+        hostnames = _hostnames_for_program(entry)
+        subdomain_count = len(hostnames)
         total_probed += subdomain_count
 
-        # Detect technologies
         detections = await detect_all(
-            hostnames=subdomains,
+            hostnames=hostnames,
             signatures=signatures,
             workers=config.workers,
             connect_timeout=config.connect_timeout,
@@ -83,7 +105,6 @@ async def run(config) -> int:
         detection_count = len(detections)
         total_detections += detection_count
 
-        # Aggregate technology names
         tech_set: set[str] = set()
         for det in detections:
             tech_set.update(det.get("technologies", []))
@@ -111,9 +132,11 @@ async def run(config) -> int:
         })
 
         ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[{ts}] [{idx}/{total}] {name} — {subdomain_count} subdomains, {detection_count} detections")  # noqa: E501
+        print(  # noqa: E501
+            f"[{ts}] [{idx}/{total}] {name} — "
+            f"{subdomain_count} probed, {detection_count} detections"
+        )
 
-    # Build output
     data = {
         "meta": {
             "generated_at": (

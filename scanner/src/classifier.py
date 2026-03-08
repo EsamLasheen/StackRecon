@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 
-
 _PLATFORM_PATTERNS: list[tuple[str, str]] = [
     (r"hackerone\.com", "HackerOne"),
     (r"bugcrowd\.com", "Bugcrowd"),
