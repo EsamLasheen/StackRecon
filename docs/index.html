@@ -21,10 +21,14 @@
       <h1 class="site-title">Stack<span class="accent">Recon</span></h1>
       <p class="site-subtitle">Bug Bounty Technology Intelligence</p>
     </div>
-    <div id="stats-bar" role="status" aria-live="polite" class="stats-bar">
-      Loading programs…
+    <div id="header-stats" class="header-stats" aria-label="Dataset statistics">
+      <span id="stat-programs"  class="stat-chip" aria-live="polite">Loading…</span>
+      <span id="stat-detections" class="stat-chip" aria-live="polite"></span>
+      <span id="stat-techs"     class="stat-chip" aria-live="polite"></span>
     </div>
   </header>
+
+  <div id="stats-bar" role="status" aria-live="polite" class="stats-bar">Loading programs…</div>
 
   <div class="layout">
     <aside class="filter-panel" aria-label="Filters">

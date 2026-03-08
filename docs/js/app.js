@@ -11,15 +11,65 @@ window.stackrecon = window.stackrecon || {
   activeFilters: { tech: "", platform: "", reward: "", name: "" },
 };
 
-const DATA_URL = "./data/data.json";
+var DATA_URL = "./data/data.json";
 
 // ---- DOM refs (resolved after DOMContentLoaded) ----------------------------
-let resultsContainer, statsBar, techSelect, platformSelect, rewardSelect, nameInput, clearBtn;
+var resultsContainer, statsBar, techSelect, platformSelect, rewardSelect, nameInput, clearBtn;
+var copyAllBannerEl;
 
-// ---- Shortcuts to avoid top-level destructuring (Firefox global conflict) --
+// ---- Shortcuts — NEVER use top-level destructuring (Firefox global conflict) --
 function C(name) { return window.stackrecon.components[name]; }
 function F(name) { return window.stackrecon.filters[name]; }
 function S(name) { return window.stackrecon.search[name]; }
+
+// ---- Header stats chips ----------------------------------------------------
+
+function updateHeaderStats(programs, totalDetections, totalTechs) {
+  var chipsContainer = document.getElementById("header-stats");
+  if (!chipsContainer) return;
+
+  var chipPrograms = document.getElementById("stat-programs");
+  var chipDetections = document.getElementById("stat-detections");
+  var chipTechs = document.getElementById("stat-techs");
+
+  if (chipPrograms) {
+    chipPrograms.innerHTML = "<strong>" + programs.toLocaleString() + "</strong> programs";
+    chipPrograms.classList.add("loaded");
+  }
+  if (chipDetections) {
+    chipDetections.innerHTML = "<strong>" + totalDetections.toLocaleString() + "</strong> detections";
+    chipDetections.classList.add("loaded");
+  }
+  if (chipTechs) {
+    chipTechs.innerHTML = "<strong>" + totalTechs.toLocaleString() + "</strong> technologies";
+    chipTechs.classList.add("loaded");
+  }
+}
+
+// ---- CopyAll banner --------------------------------------------------------
+
+function updateCopyAllBanner(activeTech) {
+  if (!copyAllBannerEl) return;
+
+  if (!activeTech) {
+    copyAllBannerEl.updateBanner("", []);
+    return;
+  }
+
+  // Collect all hostnames from all programs whose detections match activeTech
+  var allHostnames = [];
+  var programs = window.stackrecon.programs;
+  for (var i = 0; i < programs.length; i++) {
+    var dets = programs[i].detections;
+    for (var j = 0; j < dets.length; j++) {
+      if (dets[j].technologies.indexOf(activeTech) !== -1) {
+        allHostnames.push(dets[j].hostname);
+      }
+    }
+  }
+
+  copyAllBannerEl.updateBanner(activeTech, allHostnames);
+}
 
 // ---- Render ----------------------------------------------------------------
 
@@ -34,63 +84,69 @@ function renderResults(programIndices, activeTech) {
     return;
   }
 
-  const frag = document.createDocumentFragment();
-  for (const i of programIndices) {
-    frag.appendChild(C("ProgramCard")(window.stackrecon.programs[i], activeTech || null));
+  var frag = document.createDocumentFragment();
+  for (var i = 0; i < programIndices.length; i++) {
+    var card = C("ProgramCard")(window.stackrecon.programs[programIndices[i]], activeTech || null);
+    // Staggered animation via CSS custom property
+    card.style.setProperty("--card-index", String(Math.min(i, 30)));
+    frag.appendChild(card);
   }
   resultsContainer.appendChild(frag);
-  statsBar.textContent = `Showing ${programIndices.length} of ${window.stackrecon.programs.length} programs`;
+  statsBar.textContent =
+    "Showing " + programIndices.length + " of " + window.stackrecon.programs.length + " programs";
 }
 
 // ---- Index build -----------------------------------------------------------
 
 function buildIndices(programs) {
   window.stackrecon.indices = {
-    tech: F("buildTechIndex")(programs),
+    tech:     F("buildTechIndex")(programs),
     platform: F("buildPlatformIndex")(programs),
-    reward: F("buildRewardIndex")(programs),
+    reward:   F("buildRewardIndex")(programs),
   };
 }
 
 // ---- Filter application ----------------------------------------------------
 
 function applyFilters() {
-  const state = {
-    techIndex: window.stackrecon.indices.tech,
+  var state = {
+    techIndex:     window.stackrecon.indices.tech,
     platformIndex: window.stackrecon.indices.platform,
-    rewardIndex: window.stackrecon.indices.reward,
-    programs: window.stackrecon.programs,
+    rewardIndex:   window.stackrecon.indices.reward,
+    programs:      window.stackrecon.programs,
     activeFilters: window.stackrecon.activeFilters,
   };
-  const indices = F("applyAllFilters")(state);
+  var indices = F("applyAllFilters")(state);
   S("writeFiltersToHash")(window.stackrecon.activeFilters);
-  renderResults(indices, window.stackrecon.activeFilters.tech);
+  var activeTech = window.stackrecon.activeFilters.tech;
+  updateCopyAllBanner(activeTech);
+  renderResults(indices, activeTech);
 }
 
 // ---- Clear filters ---------------------------------------------------------
 
 function clearAllFilters() {
   window.stackrecon.activeFilters = { tech: "", platform: "", reward: "", name: "" };
-  techSelect.value = "";
+  techSelect.value     = "";
   platformSelect.value = "";
-  rewardSelect.value = "";
-  nameInput.value = "";
+  rewardSelect.value   = "";
+  nameInput.value      = "";
   S("writeFiltersToHash")({});
-  renderResults(
-    window.stackrecon.programs.map((_, i) => i),
-    null
-  );
-  statsBar.textContent = `Showing ${window.stackrecon.programs.length} of ${window.stackrecon.programs.length} programs`;
+  updateCopyAllBanner("");
+  var allIndices = window.stackrecon.programs.map(function (_, i) { return i; });
+  renderResults(allIndices, null);
+  statsBar.textContent =
+    "Showing " + window.stackrecon.programs.length + " of " + window.stackrecon.programs.length + " programs";
 }
 
 // ---- Populate tech dropdown ------------------------------------------------
 
 function initTechDropdown(programs) {
-  const techs = F("getAllTechnologies")(programs);
-  for (const tech of techs) {
-    const opt = document.createElement("option");
-    opt.value = tech;
-    opt.textContent = tech;
+  var techs = F("getAllTechnologies")(programs);
+  for (var i = 0; i < techs.length; i++) {
+    var opt = document.createElement("option");
+    opt.value       = techs[i];
+    opt.textContent = techs[i];
     techSelect.appendChild(opt);
   }
 }
@@ -98,67 +154,92 @@ function initTechDropdown(programs) {
 // ---- Restore filters from URL hash ----------------------------------------
 
 function restoreFiltersFromHash() {
-  const saved = S("readFiltersFromHash")();
+  var saved = S("readFiltersFromHash")();
   window.stackrecon.activeFilters = saved;
-  if (saved.tech) techSelect.value = saved.tech;
+  if (saved.tech)     techSelect.value     = saved.tech;
   if (saved.platform) platformSelect.value = saved.platform;
-  if (saved.reward) rewardSelect.value = saved.reward;
-  if (saved.name) nameInput.value = saved.name;
+  if (saved.reward)   rewardSelect.value   = saved.reward;
+  if (saved.name)     nameInput.value      = saved.name;
 }
 
 // ---- Last-updated footer ---------------------------------------------------
 
 function setLastUpdated(meta) {
-  const el = document.getElementById("last-updated");
-  if (!el || !meta || !meta.generated_at) return;
-  const d = new Date(meta.generated_at);
-  el.textContent = isNaN(d) ? meta.generated_at : d.toLocaleDateString("en-US", {
-    year: "numeric", month: "short", day: "numeric",
-  });
+  var elUpdated = document.getElementById("last-updated");
+  if (!elUpdated || !meta || !meta.generated_at) return;
+  var d = new Date(meta.generated_at);
+  elUpdated.textContent = isNaN(d.getTime())
+    ? meta.generated_at
+    : d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+}
+
+// ---- Compute totals --------------------------------------------------------
+
+function computeTotals(programs) {
+  var totalDetections = 0;
+  var techSet = {};
+  for (var i = 0; i < programs.length; i++) {
+    totalDetections += programs[i].detection_count || 0;
+    var techs = programs[i].technologies;
+    for (var j = 0; j < techs.length; j++) {
+      techSet[techs[j]] = true;
+    }
+  }
+  return {
+    detections: totalDetections,
+    techs: Object.keys(techSet).length,
+  };
 }
 
 // ---- Data fetch ------------------------------------------------------------
 
-async function fetchData() {
+function fetchData() {
   resultsContainer.innerHTML = "";
   resultsContainer.appendChild(C("LoadingSpinner")("Fetching program data…"));
 
-  let data;
-  try {
-    const resp = await fetch(DATA_URL);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    data = await resp.json();
-  } catch (err) {
-    resultsContainer.innerHTML = "";
-    resultsContainer.appendChild(
-      C("ErrorBanner")(`Failed to load program data: ${err.message}`, fetchData)
-    );
-    statsBar.textContent = "Error loading data";
-    return;
-  }
+  fetch(DATA_URL)
+    .then(function (resp) {
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
+      return resp.json();
+    })
+    .then(function (data) {
+      window.stackrecon.programs = data.programs || [];
+      buildIndices(window.stackrecon.programs);
+      initTechDropdown(window.stackrecon.programs);
+      setLastUpdated(data.meta);
 
-  window.stackrecon.programs = data.programs || [];
-  buildIndices(window.stackrecon.programs);
-  initTechDropdown(window.stackrecon.programs);
-  setLastUpdated(data.meta);
-  restoreFiltersFromHash();
-  applyFilters();
+      var totals = computeTotals(window.stackrecon.programs);
+      // Use meta counts if available, fall back to computed
+      var programCount    = (data.meta && data.meta.programs_scanned) || window.stackrecon.programs.length;
+      var detectionCount  = (data.meta && data.meta.total_detections) || totals.detections;
+      updateHeaderStats(programCount, detectionCount, totals.techs);
+
+      restoreFiltersFromHash();
+      applyFilters();
+    })
+    .catch(function (err) {
+      resultsContainer.innerHTML = "";
+      resultsContainer.appendChild(
+        C("ErrorBanner")("Failed to load program data: " + err.message, fetchData)
+      );
+      statsBar.textContent = "Error loading data";
+    });
 }
 
 // ---- Wire controls ---------------------------------------------------------
 
 function wireControls() {
-  techSelect.addEventListener("change", () => {
+  techSelect.addEventListener("change", function () {
     window.stackrecon.activeFilters.tech = techSelect.value;
     applyFilters();
   });
 
-  platformSelect.addEventListener("change", () => {
+  platformSelect.addEventListener("change", function () {
     window.stackrecon.activeFilters.platform = platformSelect.value;
     applyFilters();
   });
 
-  rewardSelect.addEventListener("change", () => {
+  rewardSelect.addEventListener("change", function () {
     window.stackrecon.activeFilters.reward = rewardSelect.value;
     applyFilters();
   });
@@ -174,17 +255,34 @@ function wireControls() {
   clearBtn.addEventListener("click", clearAllFilters);
 }
 
+// ---- Insert CopyAllBanner into DOM -----------------------------------------
+
+function initCopyAllBanner() {
+  // Insert banner between stats-bar and results-container
+  copyAllBannerEl = C("CopyAllBanner")("", []);
+  var statsBarEl  = document.getElementById("stats-bar");
+  if (statsBarEl && statsBarEl.parentNode) {
+    statsBarEl.parentNode.insertBefore(copyAllBannerEl, statsBarEl.nextSibling);
+  } else {
+    // Fallback: insert before results container
+    if (resultsContainer && resultsContainer.parentNode) {
+      resultsContainer.parentNode.insertBefore(copyAllBannerEl, resultsContainer);
+    }
+  }
+}
+
 // ---- Bootstrap -------------------------------------------------------------
 
 document.addEventListener("DOMContentLoaded", function () {
   resultsContainer = document.getElementById("results-container");
-  statsBar = document.getElementById("stats-bar");
-  techSelect = document.getElementById("tech-filter");
-  platformSelect = document.getElementById("platform-filter");
-  rewardSelect = document.getElementById("reward-filter");
-  nameInput = document.getElementById("name-search");
-  clearBtn = document.getElementById("clear-filters");
+  statsBar         = document.getElementById("stats-bar");
+  techSelect       = document.getElementById("tech-filter");
+  platformSelect   = document.getElementById("platform-filter");
+  rewardSelect     = document.getElementById("reward-filter");
+  nameInput        = document.getElementById("name-search");
+  clearBtn         = document.getElementById("clear-filters");
 
   wireControls();
+  initCopyAllBanner();
   fetchData();
 });
