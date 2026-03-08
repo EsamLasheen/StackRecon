@@ -51,4 +51,5 @@ jobs:
           git add -f docs/data/data.json
           git diff --cached --quiet && echo "No changes to commit" || \
             git commit -m "data: update scan results [$(date -u '+%Y-%m-%d')]"
+          git pull --rebase origin main
           git push
