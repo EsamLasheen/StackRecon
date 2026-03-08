@@ -13,13 +13,13 @@ window.stackrecon = window.stackrecon || {
 
 const DATA_URL = "./data/data.json";
 
-const { LoadingSpinner, EmptyState, ErrorBanner, ProgramCard } = window.stackrecon.components || {};
-const { buildTechIndex, buildPlatformIndex, buildRewardIndex, getAllTechnologies, applyAllFilters } =
-  window.stackrecon.filters || {};
-const { debounce, readFiltersFromHash, writeFiltersToHash } = window.stackrecon.search || {};
-
 // ---- DOM refs (resolved after DOMContentLoaded) ----------------------------
 let resultsContainer, statsBar, techSelect, platformSelect, rewardSelect, nameInput, clearBtn;
+
+// ---- Shortcuts to avoid top-level destructuring (Firefox global conflict) --
+function C(name) { return window.stackrecon.components[name]; }
+function F(name) { return window.stackrecon.filters[name]; }
+function S(name) { return window.stackrecon.search[name]; }
 
 // ---- Render ----------------------------------------------------------------
 
@@ -28,7 +28,7 @@ function renderResults(programIndices, activeTech) {
 
   if (programIndices.length === 0) {
     resultsContainer.appendChild(
-      EmptyState("No programs match the current filters.", clearAllFilters)
+      C("EmptyState")("No programs match the current filters.", clearAllFilters)
     );
     statsBar.textContent = "No programs found";
     return;
@@ -36,7 +36,7 @@ function renderResults(programIndices, activeTech) {
 
   const frag = document.createDocumentFragment();
   for (const i of programIndices) {
-    frag.appendChild(ProgramCard(window.stackrecon.programs[i], activeTech || null));
+    frag.appendChild(C("ProgramCard")(window.stackrecon.programs[i], activeTech || null));
   }
   resultsContainer.appendChild(frag);
   statsBar.textContent = `Showing ${programIndices.length} of ${window.stackrecon.programs.length} programs`;
@@ -46,9 +46,9 @@ function renderResults(programIndices, activeTech) {
 
 function buildIndices(programs) {
   window.stackrecon.indices = {
-    tech: buildTechIndex(programs),
-    platform: buildPlatformIndex(programs),
-    reward: buildRewardIndex(programs),
+    tech: F("buildTechIndex")(programs),
+    platform: F("buildPlatformIndex")(programs),
+    reward: F("buildRewardIndex")(programs),
   };
 }
 
@@ -62,8 +62,8 @@ function applyFilters() {
     programs: window.stackrecon.programs,
     activeFilters: window.stackrecon.activeFilters,
   };
-  const indices = applyAllFilters(state);
-  writeFiltersToHash(window.stackrecon.activeFilters);
+  const indices = F("applyAllFilters")(state);
+  S("writeFiltersToHash")(window.stackrecon.activeFilters);
   renderResults(indices, window.stackrecon.activeFilters.tech);
 }
 
@@ -75,7 +75,7 @@ function clearAllFilters() {
   platformSelect.value = "";
   rewardSelect.value = "";
   nameInput.value = "";
-  writeFiltersToHash({});
+  S("writeFiltersToHash")({});
   renderResults(
     window.stackrecon.programs.map((_, i) => i),
     null
@@ -86,7 +86,7 @@ function clearAllFilters() {
 // ---- Populate tech dropdown ------------------------------------------------
 
 function initTechDropdown(programs) {
-  const techs = getAllTechnologies(programs);
+  const techs = F("getAllTechnologies")(programs);
   for (const tech of techs) {
     const opt = document.createElement("option");
     opt.value = tech;
@@ -98,7 +98,7 @@ function initTechDropdown(programs) {
 // ---- Restore filters from URL hash ----------------------------------------
 
 function restoreFiltersFromHash() {
-  const saved = readFiltersFromHash();
+  const saved = S("readFiltersFromHash")();
   window.stackrecon.activeFilters = saved;
   if (saved.tech) techSelect.value = saved.tech;
   if (saved.platform) platformSelect.value = saved.platform;
@@ -110,7 +110,7 @@ function restoreFiltersFromHash() {
 
 function setLastUpdated(meta) {
   const el = document.getElementById("last-updated");
-  if (!el || !meta?.generated_at) return;
+  if (!el || !meta || !meta.generated_at) return;
   const d = new Date(meta.generated_at);
   el.textContent = isNaN(d) ? meta.generated_at : d.toLocaleDateString("en-US", {
     year: "numeric", month: "short", day: "numeric",
@@ -121,7 +121,7 @@ function setLastUpdated(meta) {
 
 async function fetchData() {
   resultsContainer.innerHTML = "";
-  resultsContainer.appendChild(LoadingSpinner("Fetching program data…"));
+  resultsContainer.appendChild(C("LoadingSpinner")("Fetching program data…"));
 
   let data;
   try {
@@ -131,7 +131,7 @@ async function fetchData() {
   } catch (err) {
     resultsContainer.innerHTML = "";
     resultsContainer.appendChild(
-      ErrorBanner(`Failed to load program data: ${err.message}`, fetchData)
+      C("ErrorBanner")(`Failed to load program data: ${err.message}`, fetchData)
     );
     statsBar.textContent = "Error loading data";
     return;
@@ -165,7 +165,7 @@ function wireControls() {
 
   nameInput.addEventListener(
     "input",
-    debounce(() => {
+    S("debounce")(function () {
       window.stackrecon.activeFilters.name = nameInput.value.trim();
       applyFilters();
     }, 200)
@@ -176,7 +176,7 @@ function wireControls() {
 
 // ---- Bootstrap -------------------------------------------------------------
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", function () {
   resultsContainer = document.getElementById("results-container");
   statsBar = document.getElementById("stats-bar");
   techSelect = document.getElementById("tech-filter");
