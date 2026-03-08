@@ -7,11 +7,11 @@ import datetime
 import sys
 from pathlib import Path
 
-from scanner.src.config import parse_cli_args
-from scanner.src.fetcher import SourceUnavailableError, fetch_chaos_index, download_zip
-from scanner.src.extractor import extract_subdomains
 from scanner.src.classifier import classify_platform, classify_reward_type
-from scanner.src.detector import load_signatures, detect_all
+from scanner.src.config import parse_cli_args
+from scanner.src.detector import detect_all, load_signatures
+from scanner.src.extractor import extract_subdomains
+from scanner.src.fetcher import SourceUnavailableError, download_zip, fetch_chaos_index
 from scanner.src.writer import write_atomic
 
 SIGNATURES_PATH = Path(__file__).parent.parent / "signatures" / "technologies.yaml"
@@ -111,12 +111,16 @@ async def run(config) -> int:
         })
 
         ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[{ts}] [{idx}/{total}] {name} — {subdomain_count} subdomains, {detection_count} detections")
+        print(f"[{ts}] [{idx}/{total}] {name} — {subdomain_count} subdomains, {detection_count} detections")  # noqa: E501
 
     # Build output
     data = {
         "meta": {
-            "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z"),
+            "generated_at": (
+                datetime.datetime.now(datetime.timezone.utc)
+                .isoformat()
+                .replace("+00:00", "Z")
+            ),
             "programs_scanned": len(programs_out),
             "programs_failed": programs_failed,
             "total_subdomains_probed": total_probed,

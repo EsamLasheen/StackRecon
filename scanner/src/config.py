@@ -18,7 +18,9 @@ class ScanConfig:
     api_key: str | None = None
 
 
-def _validate_range(parser: argparse.ArgumentParser, value: int, lo: int, hi: int, name: str) -> int:
+def _validate_range(
+    parser: argparse.ArgumentParser, value: int, lo: int, hi: int, name: str
+) -> int:
     if not (lo <= value <= hi):
         parser.error(f"--{name} must be between {lo} and {hi}, got {value}")
     return value

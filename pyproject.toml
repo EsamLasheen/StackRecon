@@ -7,8 +7,10 @@ markers = [
 
 [tool.ruff]
 line-length = 100
-select = ["E", "F", "I"]
 exclude = ["tests/", ".venv/"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
 
 [tool.black]
 line-length = 100

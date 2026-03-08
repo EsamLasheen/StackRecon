@@ -10,7 +10,6 @@ from typing import Any
 import httpx
 import yaml
 
-
 # ---------------------------------------------------------------------------
 # Signature loading
 # ---------------------------------------------------------------------------
@@ -129,7 +128,9 @@ async def probe_subdomain(
         for live_probe_required signatures; None if no relevant detections.
     """
     url = f"http://{hostname}"
-    timeout = httpx.Timeout(connect=float(connect_timeout), read=float(read_timeout), write=5.0, pool=5.0)
+    timeout = httpx.Timeout(
+        connect=float(connect_timeout), read=float(read_timeout), write=5.0, pool=5.0
+    )
 
     try:
         async with httpx.AsyncClient(
