@@ -44,6 +44,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/data/data.json
+          git add -f docs/data/data.json
           git diff --cached --quiet || git commit -m "chore: update scan data [$(date -u '+%Y-%m-%d')]"
           git push

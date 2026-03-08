@@ -14,8 +14,7 @@ build/
 htmlcov/
 *.tmp
 
-# Scanner output (large; commit selectively)
-docs/data/data.json
+# Scanner temp files only (data.json is committed by CI)
 docs/data/*.tmp
 
 # Secrets / env
