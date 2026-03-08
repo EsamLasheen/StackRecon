@@ -1,0 +1,120 @@
+{
+  "meta": {
+    "generated_at": "2026-03-08T12:00:00Z",
+    "programs_scanned": 5,
+    "programs_failed": 0,
+    "total_subdomains_probed": 47,
+    "total_detections": 8,
+    "scanner_version": "1.0.0",
+    "workers_used": 5
+  },
+  "programs": [
+    {
+      "name": "HackerOne",
+      "url": "https://hackerone.com/security",
+      "platform": "HackerOne",
+      "reward_type": "paid",
+      "domains": ["hackerone.com", "hackerone.net"],
+      "technologies": ["Grafana", "Jenkins"],
+      "subdomain_count": 15,
+      "detection_count": 3,
+      "detections": [
+        {
+          "hostname": "grafana.hackerone.com",
+          "technologies": ["Grafana"],
+          "http_status": 200,
+          "probe_error": null
+        },
+        {
+          "hostname": "ci.hackerone.com",
+          "technologies": ["Jenkins"],
+          "http_status": 200,
+          "probe_error": null
+        },
+        {
+          "hostname": "build.hackerone.com",
+          "technologies": ["Jenkins"],
+          "http_status": 200,
+          "probe_error": null
+        }
+      ]
+    },
+    {
+      "name": "Bugcrowd",
+      "url": "https://bugcrowd.com/engagements/bugcrowd",
+      "platform": "Bugcrowd",
+      "reward_type": "paid",
+      "domains": ["bugcrowd.com"],
+      "technologies": ["WordPress"],
+      "subdomain_count": 8,
+      "detection_count": 1,
+      "detections": [
+        {
+          "hostname": "blog.bugcrowd.com",
+          "technologies": ["WordPress"],
+          "http_status": 200,
+          "probe_error": null
+        }
+      ]
+    },
+    {
+      "name": "Intigriti",
+      "url": "https://app.intigriti.com/programs/intigriti/intigriti/detail",
+      "platform": "Intigriti",
+      "reward_type": "paid",
+      "domains": ["intigriti.com"],
+      "technologies": ["Keycloak"],
+      "subdomain_count": 12,
+      "detection_count": 2,
+      "detections": [
+        {
+          "hostname": "sso.intigriti.com",
+          "technologies": ["Keycloak"],
+          "http_status": 200,
+          "probe_error": null
+        },
+        {
+          "hostname": "auth.intigriti.com",
+          "technologies": ["Keycloak"],
+          "http_status": 200,
+          "probe_error": null
+        }
+      ]
+    },
+    {
+      "name": "YesWeHack",
+      "url": "https://yeswehack.com/programs/yeswehack",
+      "platform": "YesWeHack",
+      "reward_type": "paid",
+      "domains": ["yeswehack.com"],
+      "technologies": ["Prometheus", "Grafana"],
+      "subdomain_count": 9,
+      "detection_count": 2,
+      "detections": [
+        {
+          "hostname": "metrics.yeswehack.com",
+          "technologies": ["Prometheus"],
+          "http_status": 200,
+          "probe_error": null
+        },
+        {
+          "hostname": "monitoring.yeswehack.com",
+          "technologies": ["Grafana"],
+          "http_status": 200,
+          "probe_error": null
+        }
+      ]
+    },
+    {
+      "name": "OpenBugBounty",
+      "url": "https://www.openbugbounty.org/",
+      "platform": "Other",
+      "reward_type": "free",
+      "domains": ["openbugbounty.org"],
+      "technologies": [],
+      "subdomain_count": 3,
+      "detection_count": 0,
+      "detections": []
+    }
+  ]
+}

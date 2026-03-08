@@ -1,0 +1,817 @@
+# StackRecon Technology Signatures
+# Format: id, name, category, live_probe_required, min_confidence_threshold, signals
+# Signals: headers[], html[], paths[]
+
+technologies:
+
+  # ── Monitoring / Analytics ──────────────────────────────────────────────
+  - id: grafana
+    name: Grafana
+    category: Monitoring/Analytics
+    live_probe_required: true
+    min_confidence_threshold: 0.60
+    signals:
+      headers:
+        - name: Server
+          pattern: "(?i)grafana"
+          confidence: 0.95
+      html:
+        - type: title
+          pattern: "(?i)^Grafana"
+          confidence: 0.95
+        - type: meta
+          name: application-name
+          pattern: "(?i)Grafana"
+          confidence: 0.90
+        - type: body
+          pattern: "/public/app/"
+          confidence: 0.75
+    paths:
+      - path: /api/health
+        patterns: ["version"]
+        confidence: 0.80
+
+  - id: prometheus
+    name: Prometheus
+    category: Monitoring/Analytics
+    live_probe_required: true
+    min_confidence_threshold: 0.65
+    signals:
+      html:
+        - type: title
+          pattern: "(?i)^Prometheus"
+          confidence: 0.95
+    paths:
+      - path: /metrics
+        patterns: ["# TYPE", "# HELP"]
+        confidence: 0.95
+      - path: /api/v1/query
+        status_codes: [200, 400]
+        confidence: 0.80
+
+  - id: kibana
+    name: Kibana
+    category: Visualization/Analytics
+    live_probe_required: true
+    min_confidence_threshold: 0.60
+    signals:
+      headers:
+        - name: X-Elastic-Product
+          pattern: "(?i)Kibana"
+          confidence: 0.98
+      html:
+        - type: title
+          pattern: "(?i)Kibana"
+          confidence: 0.95
+        - type: meta
+          name: generator
+          pattern: "(?i)Kibana"
+          confidence: 0.90
+    paths:
+      - path: /api/status
+        patterns: ["version"]
+        confidence: 0.85
+
+  # ── CI/CD ────────────────────────────────────────────────────────────────
+  - id: jenkins
+    name: Jenkins
+    category: CI/CD
+    live_probe_required: true
+    min_confidence_threshold: 0.60
+    signals:
+      headers:
+        - name: X-Jenkins
+          pattern: ".*"
+          confidence: 0.99
+        - name: Server
+          pattern: "(?i)jenkins"
+          confidence: 0.95
+      html:
+        - type: title
+          pattern: "(?i)Jenkins"
+          confidence: 0.95
+        - type: body
+          pattern: "<h1[^>]*>Jenkins"
+          confidence: 0.95
+    paths:
+      - path: /login
+        patterns: ["jenkins", "credentials"]
+        confidence: 0.85
+      - path: /api/json
+        status_codes: [200, 401]
+        confidence: 0.80
+    version_patterns:
+      - header: X-Jenkins
+        regex: "([\\d.]+)"
+
+  - id: teamcity
+    name: TeamCity
+    category: CI/CD
+    live_probe_required: true
+    min_confidence_threshold: 0.65
+    signals:
+      headers:
+        - name: Server
+          pattern: "(?i)teamcity"
+          confidence: 0.95
+      html:
+        - type: title
+          pattern: "(?i)TeamCity"
+          confidence: 0.95
+    paths:
+      - path: /login.html
+        patterns: ["TeamCity"]
+        confidence: 0.80
+
+  - id: gocd
+    name: GoCD
+    category: CI/CD
+    live_probe_required: true
+    min_confidence_threshold: 0.65
+    signals:
+      html:
+        - type: title
+          pattern: "(?i)GoCD"
+          confidence: 0.95
+    paths:
+      - path: /go/auth/login
+        patterns: ["GoCD"]
+        confidence: 0.85
+
+  - id: bamboo
+    name: Bamboo
+    category: CI/CD
+    live_probe_required: true
+    min_confidence_threshold: 0.65
+    signals:
+      html:
+        - type: title
+          pattern: "(?i)Bamboo"
+          confidence: 0.90
+    paths:
+      - path: /userlogin.action
+        patterns: ["Bamboo"]
+        confidence: 0.80
+
+  - id: argocd
+    name: ArgoCD
+    category: CI/CD
+    live_probe_required: true
+    min_confidence_threshold: 0.65
+    signals:
+      html:
+        - type: title
+          pattern: "(?i)Argo CD"
+          confidence: 0.95
+    paths:
+      - path: /api/version
+        patterns: ["Version"]
+        confidence: 0.85
+
+  # ── Identity / Auth ──────────────────────────────────────────────────────
+  - id: keycloak
+    name: Keycloak
+    category: Identity/Auth
+    live_probe_required: true
+    min_confidence_threshold: 0.60
+    signals:
+      html:
+        - type: title
+          pattern: "(?i)Keycloak"
+          confidence: 0.95
+        - type: body
+          pattern: 'id="kc-form'
+          confidence: 0.95
+        - type: body
+          pattern: "/auth/js/"
+          confidence: 0.85
+    paths:
+      - path: /auth/realms
+        status_codes: [200, 404]
+        confidence: 0.80
+
+  - id: vault
+    name: HashiCorp Vault
+    category: Identity/Auth
+    live_probe_required: true
+    min_confidence_threshold: 0.65
+    signals:
+      html:
+        - type: title
+          pattern: "(?i)Vault"
+          confidence: 0.85
+    paths:
+      - path: /v1/sys/health
+        patterns: ["initialized"]
+        confidence: 0.95
+      - path: /ui/
+        patterns: ["Vault"]
+        confidence: 0.80
+
+  # ── CMS ──────────────────────────────────────────────────────────────────
+  - id: wordpress
+    name: WordPress
+    category: CMS
+    live_probe_required: false
+    min_confidence_threshold: 0.60
+    signals:
+      headers:
+        - name: X-Powered-By
+          pattern: "(?i)wordpress"
+          confidence: 0.85
+      html:
+        - type: meta
+          name: generator
+          pattern: "(?i)WordPress"
+          confidence: 0.99
+        - type: body
+          pattern: "wp-content/(plugins|themes)/"
+          confidence: 0.95
+        - type: body
+          pattern: "/wp-includes/"
+          confidence: 0.85
+    version_patterns:
+      - html_meta: generator
+        regex: "WordPress\\s+([\\d.]+)"
+
+  - id: drupal
+    name: Drupal
+    category: CMS
+    live_probe_required: false
+    min_confidence_threshold: 0.60
+    signals:
+      headers:
+        - name: X-Generator
+          pattern: "(?i)Drupal"
+          confidence: 0.98
+      html:
+        - type: meta
+          name: generator
+          pattern: "(?i)Drupal"
+          confidence: 0.98
+        - type: body
+          pattern: "/sites/default/files/"
+          confidence: 0.85
+
+  - id: magento
+    name: Magento
+    category: CMS
+    live_probe_required: false
+    min_confidence_threshold: 0.65
+    signals:
+      html:
+        - type: body
+          pattern: "Mage\\.Cookies"
+          confidence: 0.90
+        - type: body
+          pattern: "/skin/frontend/|/pub/static/"
+          confidence: 0.85
+
+  - id: shopify
+    name: Shopify
+    category: CMS
+    live_probe_required: false
+    min_confidence_threshold: 0.65
+    signals:
+      headers:
+        - name: X-ShopId
+          pattern: ".*"
+          confidence: 0.99
+        - name: X-Shopify-Stage
+          pattern: ".*"
+          confidence: 0.99
+      html:
+        - type: body
+          pattern: "cdn\\.shopify\\.com"
+          confidence: 0.90
+
+  # ── DevOps / VCS ─────────────────────────────────────────────────────────
+  - id: gitlab
+    name: GitLab
+    category: DevOps/VCS
+    live_probe_required: true
+    min_confidence_threshold: 0.60
+    signals:
+      headers:
+        - name: X-GitLab-Custom-Error
+          pattern: ".*"
+          confidence: 0.95
+      html:
+        - type: title
+          pattern: "(?i)GitLab"
+          confidence: 0.90
+    paths:
+      - path: /api/v4/version
+        status_codes: [200]
+        patterns: ["version"]
+        confidence: 0.95
+
+  - id: gitea
+    name: Gitea
+    category: DevOps/VCS
+    live_probe_required: true
+    min_confidence_threshold: 0.65
+    signals:
+      html:
+        - type: title
+          pattern: "(?i)Gitea"
+          confidence: 0.95
+    paths:
+      - path: /api/v1/version
+        patterns: ["version"]
+        confidence: 0.90
+
+  - id: gogs
+    name: Gogs
+    category: DevOps/VCS
+    live_probe_required: true
+    min_confidence_threshold: 0.65
+    signals:
+      html:
+        - type: title
+          pattern: "(?i)Gogs"
+          confidence: 0.95
+        - type: body
+          pattern: "(?i)gogs"
+          confidence: 0.80
+
+  - id: bitbucket_server
+    name: Bitbucket Server
+    category: DevOps/VCS
+    live_probe_required: true
+    min_confidence_threshold: 0.65
+    signals:
+      html:
+        - type: title
+          pattern: "(?i)Bitbucket"
+          confidence: 0.90
+    paths:
+      - path: /rest/api/1.0/application-properties
+        patterns: ["version"]
+        confidence: 0.90
+
+  # ── Project Management ───────────────────────────────────────────────────
+  - id: jira
+    name: Jira
+    category: Project Management
+    live_probe_required: true
+    min_confidence_threshold: 0.60
+    signals:
+      html:
+        - type: title
+          pattern: "(?i)Jira"
+          confidence: 0.95
+        - type: meta
+          name: ajs-version-number
+          pattern: ".*"
+          confidence: 0.95
+    paths:
+      - path: /secure/Dashboard.jspa
+        status_codes: [200, 302]
+        confidence: 0.80
+
+  # ── Collaboration ────────────────────────────────────────────────────────
+  - id: confluence
+    name: Confluence
+    category: Collaboration
+    live_probe_required: true
+    min_confidence_threshold: 0.60
+    signals:
+      html:
+        - type: title
+          pattern: "(?i)Confluence"
+          confidence: 0.95
+        - type: meta
+          name: ajs-version-number
+          pattern: ".*"
+          confidence: 0.90
+    paths:
+      - path: /home.action
+        patterns: ["confluence"]
+        confidence: 0.75
+
+  # ── Search / Data ────────────────────────────────────────────────────────
+  - id: elasticsearch
+    name: Elasticsearch
+    category: Search/Data
+    live_probe_required: true
+    min_confidence_threshold: 0.65
+    signals:
+      headers:
+        - name: X-Elastic-Product
+          pattern: "(?i)Elasticsearch"
+          confidence: 0.99
+    paths:
+      - path: /
+        patterns: ["elasticsearch", "\"version\""]
+        confidence: 0.95
+      - path: /_cat/indices
+        status_codes: [200]
+        confidence: 0.85
+
+  # ── Web Servers ──────────────────────────────────────────────────────────
+  - id: nginx
+    name: Nginx
+    category: Web Server
+    live_probe_required: false
+    min_confidence_threshold: 0.70
+    signals:
+      headers:
+        - name: Server
+          pattern: "(?i)^nginx"
+          confidence: 0.98
+      html:
+        - type: title
+          pattern: "(?i)Welcome to nginx"
+          confidence: 0.99
+
+  - id: apache
+    name: Apache HTTP Server
+    category: Web Server
+    live_probe_required: false
+    min_confidence_threshold: 0.70
+    signals:
+      headers:
+        - name: Server
+          pattern: "(?i)^Apache"
+          confidence: 0.98
+      html:
+        - type: title
+          pattern: "(?i)Apache.*Test Page|It works!"
+          confidence: 0.99
+
+  - id: traefik
+    name: Traefik
+    category: Web Server
+    live_probe_required: true
+    min_confidence_threshold: 0.65
+    signals:
+      headers:
+        - name: Server
+          pattern: "(?i)traefik"
+          confidence: 0.98
+    paths:
+      - path: /api/rawdata
+        patterns: ["routers"]
+        confidence: 0.85
+      - path: /dashboard/
+        patterns: ["Traefik"]
+        confidence: 0.80
+
+  - id: haproxy
+    name: HAProxy
+    category: Web Server
+    live_probe_required: false
+    min_confidence_threshold: 0.70
+    signals:
+      headers:
+        - name: Server
+          pattern: "(?i)haproxy"
+          confidence: 0.99
+    paths:
+      - path: /haproxy-status
+        patterns: ["HAProxy"]
+        confidence: 0.90
+
+  # ── Frameworks ───────────────────────────────────────────────────────────
+  - id: tomcat
+    name: Apache Tomcat
+    category: Framework
+    live_probe_required: false
+    min_confidence_threshold: 0.65
+    signals:
+      headers:
+        - name: Server
+          pattern: "(?i)Apache-Coyote|Tomcat"
+          confidence: 0.95
+      html:
+        - type: title
+          pattern: "(?i)Apache Tomcat"
+          confidence: 0.99
+
+  - id: spring_boot
+    name: Spring Boot
+    category: Framework
+    live_probe_required: true
+    min_confidence_threshold: 0.65
+    signals:
+      headers:
+        - name: X-Application-Context
+          pattern: ".*"
+          confidence: 0.90
+      html:
+        - type: body
+          pattern: "Whitelabel Error Page"
+          confidence: 0.85
+    paths:
+      - path: /actuator/health
+        patterns: ["status"]
+        confidence: 0.92
+
+  - id: django
+    name: Django
+    category: Framework
+    live_probe_required: false
+    min_confidence_threshold: 0.65
+    signals:
+      headers:
+        - name: X-Frame-Options
+          pattern: "SAMEORIGIN"
+          confidence: 0.50
+      html:
+        - type: title
+          pattern: "(?i)Django"
+          confidence: 0.85
+        - type: body
+          pattern: "csrfmiddlewaretoken"
+          confidence: 0.80
+
+  - id: rails
+    name: Ruby on Rails
+    category: Framework
+    live_probe_required: false
+    min_confidence_threshold: 0.65
+    signals:
+      headers:
+        - name: X-Runtime
+          pattern: ".*"
+          confidence: 0.90
+        - name: X-Powered-By
+          pattern: "(?i)Phusion Passenger"
+          confidence: 0.80
+
+  - id: laravel
+    name: Laravel
+    category: Framework
+    live_probe_required: false
+    min_confidence_threshold: 0.65
+    signals:
+      headers:
+        - name: Set-Cookie
+          pattern: "laravel_session"
+          confidence: 0.95
+      html:
+        - type: body
+          pattern: "laravel"
+          confidence: 0.70
+
+  # ── CDN / Infrastructure ─────────────────────────────────────────────────
+  - id: cloudflare
+    name: Cloudflare
+    category: CDN/Infrastructure
+    live_probe_required: false
+    min_confidence_threshold: 0.80
+    signals:
+      headers:
+        - name: Server
+          pattern: "(?i)cloudflare"
+          confidence: 0.99
+        - name: CF-Ray
+          pattern: ".*"
+          confidence: 0.99
+
+  - id: fastly
+    name: Fastly
+    category: CDN/Infrastructure
+    live_probe_required: false
+    min_confidence_threshold: 0.80
+    signals:
+      headers:
+        - name: X-Served-By
+          pattern: "(?i)cache-"
+          confidence: 0.75
+        - name: Fastly-Debug-Digest
+          pattern: ".*"
+          confidence: 0.99
+        - name: X-Fastly-Request-ID
+          pattern: ".*"
+          confidence: 0.98
+
+  - id: aws_alb
+    name: AWS ALB
+    category: CDN/Infrastructure
+    live_probe_required: false
+    min_confidence_threshold: 0.80
+    signals:
+      headers:
+        - name: Server
+          pattern: "(?i)awselb"
+          confidence: 0.99
+        - name: X-Amzn-Trace-Id
+          pattern: ".*"
+          confidence: 0.90
+
+  # ── Container Orchestration ──────────────────────────────────────────────
+  - id: portainer
+    name: Portainer
+    category: Container Management
+    live_probe_required: true
+    min_confidence_threshold: 0.65
+    signals:
+      html:
+        - type: title
+          pattern: "(?i)Portainer"
+          confidence: 0.95
+    paths:
+      - path: /api/status
+        patterns: ["Version"]
+        confidence: 0.85
+
+  - id: rancher
+    name: Rancher
+    category: Container Management
+    live_probe_required: true
+    min_confidence_threshold: 0.65
+    signals:
+      html:
+        - type: title
+          pattern: "(?i)Rancher"
+          confidence: 0.95
+    paths:
+      - path: /v3
+        patterns: ["apiVersion"]
+        confidence: 0.85
+
+  # ── Infrastructure Tooling ───────────────────────────────────────────────
+  - id: consul
+    name: HashiCorp Consul
+    category: Infrastructure
+    live_probe_required: true
+    min_confidence_threshold: 0.65
+    signals:
+      html:
+        - type: title
+          pattern: "(?i)Consul"
+          confidence: 0.90
+    paths:
+      - path: /v1/agent/self
+        patterns: ["Config"]
+        confidence: 0.92
+
+  - id: nomad
+    name: HashiCorp Nomad
+    category: Infrastructure
+    live_probe_required: true
+    min_confidence_threshold: 0.65
+    signals:
+      html:
+        - type: title
+          pattern: "(?i)Nomad"
+          confidence: 0.90
+    paths:
+      - path: /v1/agent/self
+        patterns: ["Version"]
+        confidence: 0.90
+
+  - id: etcd
+    name: etcd
+    category: Infrastructure
+    live_probe_required: true
+    min_confidence_threshold: 0.65
+    signals:
+      paths:
+        - path: /health
+          patterns: ["health"]
+          confidence: 0.85
+        - path: /v3/cluster/member/list
+          status_codes: [200]
+          confidence: 0.90
+
+  # ── Message Queues ───────────────────────────────────────────────────────
+  - id: rabbitmq
+    name: RabbitMQ
+    category: Message Queue
+    live_probe_required: true
+    min_confidence_threshold: 0.65
+    signals:
+      html:
+        - type: title
+          pattern: "(?i)RabbitMQ"
+          confidence: 0.99
+    paths:
+      - path: /api/overview
+        patterns: ["rabbitmq_version"]
+        confidence: 0.95
+
+  # ── Databases (HTTP APIs) ────────────────────────────────────────────────
+  - id: redis_http
+    name: Redis (HTTP API)
+    category: Database
+    live_probe_required: true
+    min_confidence_threshold: 0.75
+    signals:
+      paths:
+        - path: /
+          patterns: ["redis_version"]
+          confidence: 0.90
+
+  - id: minio
+    name: MinIO
+    category: Object Storage
+    live_probe_required: true
+    min_confidence_threshold: 0.65
+    signals:
+      headers:
+        - name: X-Amz-Request-Id
+          pattern: ".*"
+          confidence: 0.70
+        - name: Server
+          pattern: "(?i)minio"
+          confidence: 0.99
+    paths:
+      - path: /minio/health/live
+        status_codes: [200]
+        confidence: 0.90
+
+  # ── Code Quality / Artifact ──────────────────────────────────────────────
+  - id: sonarqube
+    name: SonarQube
+    category: Code Quality
+    live_probe_required: true
+    min_confidence_threshold: 0.65
+    signals:
+      html:
+        - type: title
+          pattern: "(?i)SonarQube"
+          confidence: 0.99
+    paths:
+      - path: /api/system/status
+        patterns: ["status"]
+        confidence: 0.90
+
+  - id: nexus
+    name: Nexus Repository
+    category: Artifact Registry
+    live_probe_required: true
+    min_confidence_threshold: 0.65
+    signals:
+      html:
+        - type: title
+          pattern: "(?i)Nexus Repository"
+          confidence: 0.95
+    paths:
+      - path: /service/rest/v1/status
+        patterns: ["edition"]
+        confidence: 0.88
+
+  - id: harbor
+    name: Harbor
+    category: Artifact Registry
+    live_probe_required: true
+    min_confidence_threshold: 0.65
+    signals:
+      html:
+        - type: title
+          pattern: "(?i)Harbor"
+          confidence: 0.90
+    paths:
+      - path: /api/v2.0/systeminfo
+        patterns: ["harbor_version"]
+        confidence: 0.95
+
+  # ── Web Tools ────────────────────────────────────────────────────────────
+  - id: phpmyadmin
+    name: phpMyAdmin
+    category: Database Tool
+    live_probe_required: false
+    min_confidence_threshold: 0.65
+    signals:
+      html:
+        - type: title
+          pattern: "(?i)phpMyAdmin"
+          confidence: 0.99
+        - type: body
+          pattern: "pma_|PMA_"
+          confidence: 0.90
+
+  - id: roundcube
+    name: Roundcube
+    category: Webmail
+    live_probe_required: false
+    min_confidence_threshold: 0.65
+    signals:
+      html:
+        - type: title
+          pattern: "(?i)Roundcube"
+          confidence: 0.99
+        - type: body
+          pattern: "rcmloginuser"
+          confidence: 0.95
+
+  # ── API Gateways ─────────────────────────────────────────────────────────
+  - id: kong
+    name: Kong Gateway
+    category: API Gateway
+    live_probe_required: false
+    min_confidence_threshold: 0.70
+    signals:
+      headers:
+        - name: X-Kong-Upstream-Latency
+          pattern: ".*"
+          confidence: 0.99
+        - name: X-Kong-Proxy-Latency
+          pattern: ".*"
+          confidence: 0.99
+        - name: Server
+          pattern: "(?i)kong"
+          confidence: 0.90

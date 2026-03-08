@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    name: Unit & Integration Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r scanner/requirements.txt
+
+      - name: Lint with ruff
+        run: ruff check scanner/src/ scanner/main.py
+
+      - name: Format check with black
+        run: black --check scanner/src/ scanner/main.py
+
+      - name: Run unit tests with coverage
+        run: |
+          python3 -m pytest tests/unit/ tests/integration/ \
+            --cov=scanner/src \
+            --cov-fail-under=80 \
+            -q
+
+      - name: Verify signature count
+        run: |
+          python3 -c "
+          import yaml
+          data = yaml.safe_load(open('signatures/technologies.yaml'))
+          count = len(data['technologies'])
+          assert count >= 47, f'Only {count} signatures, need ≥47'
+          print(f'OK: {count} technology signatures')
+          "

@@ -1,0 +1,49 @@
+name: Weekly Scan
+
+on:
+  schedule:
+    # Every Sunday at 02:00 UTC
+    - cron: "0 2 * * 0"
+  workflow_dispatch:
+    # Allow manual trigger from GitHub UI (Actions tab → "Run workflow")
+    inputs:
+      limit:
+        description: "Max programs to scan (leave empty for all)"
+        required: false
+        default: ""
+
+jobs:
+  scan:
+    name: Run StackRecon Scanner
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write  # needed to commit data.json back to repo
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r scanner/requirements.txt
+
+      - name: Run scanner
+        run: |
+          if [ -n "${{ github.event.inputs.limit }}" ]; then
+            python3 -m scanner.main --limit ${{ github.event.inputs.limit }} --output docs/data/data.json
+          else
+            python3 -m scanner.main --output docs/data/data.json
+          fi
+
+      - name: Commit updated data.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/data/data.json
+          git diff --cached --quiet || git commit -m "chore: update scan data [$(date -u '+%Y-%m-%d')]"
+          git push

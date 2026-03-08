@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="StackRecon — discover what technologies are running behind every public bug bounty program." />
+  <meta property="og:title" content="StackRecon — Bug Bounty Technology Intelligence" />
+  <meta property="og:description" content="Discover what technologies are running behind every public bug bounty program." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://EsamLasheen.github.io/StackRecon/" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="StackRecon — Bug Bounty Technology Intelligence" />
+  <meta name="twitter:description" content="Discover what technologies are running behind every public bug bounty program." />
+  <title>StackRecon — Bug Bounty Technology Intelligence</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <a href="#results-container" class="skip-link">Skip to results</a>
+  <header class="site-header">
+    <div class="header-inner">
+      <h1 class="site-title">Stack<span class="accent">Recon</span></h1>
+      <p class="site-subtitle">Bug Bounty Technology Intelligence</p>
+    </div>
+    <div id="stats-bar" role="status" aria-live="polite" class="stats-bar">
+      Loading programs…
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="filter-panel" aria-label="Filters">
+      <section class="filter-group">
+        <label for="tech-filter" class="filter-label">Technology</label>
+        <select id="tech-filter" class="filter-select">
+          <option value="">All technologies</option>
+        </select>
+      </section>
+
+      <section class="filter-group">
+        <label for="platform-filter" class="filter-label">Platform</label>
+        <select id="platform-filter" class="filter-select">
+          <option value="">All platforms</option>
+          <option value="HackerOne">HackerOne</option>
+          <option value="Bugcrowd">Bugcrowd</option>
+          <option value="Intigriti">Intigriti</option>
+          <option value="YesWeHack">YesWeHack</option>
+          <option value="Other">Other</option>
+        </select>
+      </section>
+
+      <section class="filter-group">
+        <label for="reward-filter" class="filter-label">Reward Type</label>
+        <select id="reward-filter" class="filter-select">
+          <option value="">All types</option>
+          <option value="paid">Paid</option>
+          <option value="free">Free</option>
+          <option value="self-hosted">Self-Hosted</option>
+        </select>
+      </section>
+
+      <section class="filter-group">
+        <label for="name-search" class="filter-label">Program Name</label>
+        <input
+          type="text"
+          id="name-search"
+          class="filter-input"
+          placeholder="Search programs…"
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </section>
+
+      <button id="clear-filters" class="btn-clear" type="button">
+        Clear all filters
+      </button>
+    </aside>
+
+    <main id="results-container" role="main" aria-label="Program results">
+      <!-- Populated by app.js -->
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <span>Data sourced from <a href="https://chaos.projectdiscovery.io/" target="_blank" rel="noopener noreferrer">Chaos ProjectDiscovery</a></span>
+    <span class="footer-sep">·</span>
+    <a href="https://github.com/EsamLasheen/StackRecon" target="_blank" rel="noopener noreferrer">GitHub</a>
+    <span class="footer-sep">·</span>
+    <span>Last updated: <span id="last-updated">—</span></span>
+  </footer>
+
+  <script src="js/filters.js"></script>
+  <script src="js/components.js"></script>
+  <script src="js/search.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
