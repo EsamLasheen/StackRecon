@@ -16,6 +16,7 @@ var DATA_URL = "./data/data.json";
 // ---- DOM refs (resolved after DOMContentLoaded) ----------------------------
 var resultsContainer, statsBar, techSelect, platformSelect, rewardSelect, nameInput, clearBtn;
 var copyAllBannerEl;
+var insightsPanelEl;
 
 // ---- Shortcuts — NEVER use top-level destructuring (Firefox global conflict) --
 function C(name) { return window.stackrecon.components[name]; }
@@ -215,6 +216,7 @@ function fetchData() {
       var detectionCount  = (data.meta && data.meta.total_detections) || totals.detections;
       updateHeaderStats(programCount, detectionCount, totals.techs);
 
+      initInsightsPanel(window.stackrecon.programs);
       restoreFiltersFromHash();
       applyFilters();
     })
@@ -272,6 +274,27 @@ function initCopyAllBanner() {
   }
 }
 
+// ---- Insert InsightsPanel into DOM -----------------------------------------
+
+function initInsightsPanel(programs) {
+  insightsPanelEl = C("InsightsPanel")(programs);
+
+  // Wire click-to-filter callback
+  window.stackrecon._onInsightClick = function (tech) {
+    techSelect.value = tech;
+    window.stackrecon.activeFilters.tech = tech;
+    applyFilters();
+    // Scroll to results
+    resultsContainer.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  // Insert between stats-bar and layout
+  var statsBarEl = document.getElementById("stats-bar");
+  if (statsBarEl && statsBarEl.parentNode) {
+    statsBarEl.parentNode.insertBefore(insightsPanelEl, statsBarEl.nextSibling);
+  }
+}
+
 // ---- Auto-refresh ----------------------------------------------------------
 
 var lastGeneratedAt = null;
@@ -300,6 +323,9 @@ function checkForUpdates() {
         var programCount   = (data.meta && data.meta.programs_scanned) || window.stackrecon.programs.length;
         var detectionCount = (data.meta && data.meta.total_detections) || totals.detections;
         updateHeaderStats(programCount, detectionCount, totals.techs);
+        if (insightsPanelEl && insightsPanelEl.updateInsights) {
+          insightsPanelEl = insightsPanelEl.updateInsights(window.stackrecon.programs);
+        }
         applyFilters();
       }
       lastGeneratedAt = newGenerated;

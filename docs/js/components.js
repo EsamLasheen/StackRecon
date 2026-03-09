@@ -402,6 +402,143 @@ function CopyAllBanner(techName, hostnames) {
 }
 
 // ============================================================
+// InsightsPanel(programs)
+// Full-width bar chart of top 10 most detected technologies.
+// Screenshot-worthy for social sharing.
+// ============================================================
+
+function InsightsPanel(programs) {
+  programs = programs || [];
+
+  // Compute tech frequency across all programs
+  var techCount = {};
+  for (var i = 0; i < programs.length; i++) {
+    var techs = programs[i].technologies;
+    for (var j = 0; j < techs.length; j++) {
+      techCount[techs[j]] = (techCount[techs[j]] || 0) + 1;
+    }
+  }
+
+  var sorted = Object.keys(techCount).map(function (t) {
+    return { tech: t, count: techCount[t] };
+  }).sort(function (a, b) { return b.count - a.count; }).slice(0, 10);
+
+  var maxCount = sorted.length > 0 ? sorted[0].count : 1;
+
+  var panel = el("div", {
+    id: "insights-panel",
+    "class": "insights-panel",
+    "aria-label": "Top exposed technologies",
+  });
+
+  // ---- Header ----
+  var header = el("div", { "class": "insights-header" });
+
+  var titleGroup = el("div", { "class": "insights-title-group" });
+  titleGroup.appendChild(el("span", { "class": "insights-title", text: "TOP EXPOSED TECHNOLOGIES" }));
+  titleGroup.appendChild(el("span", {
+    "class": "insights-subtitle",
+    text: programs.length.toLocaleString() + " programs scanned",
+  }));
+  header.appendChild(titleGroup);
+
+  // LinkedIn share button
+  var shareBtn = el("button", {
+    "class": "btn-share-linkedin",
+    type: "button",
+  });
+  shareBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;margin-right:5px"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>Share on LinkedIn';
+
+  shareBtn.addEventListener("click", function () {
+    var topTech = sorted.length > 0 ? sorted[0] : null;
+    var postText = topTech
+      ? (
+        "\uD83C\uDFAF " + topTech.count + " out of " + programs.length + " bug bounty programs have " + topTech.tech + " exposed publicly.\n\n" +
+        "I built StackRecon \u2014 a free open-source tool that fingerprints the entire public bug bounty ecosystem.\n\n" +
+        "It scans every program from Chaos ProjectDiscovery and maps their tech stack:\n" +
+        "\u2022 Grafana, Jenkins, GitLab, Keycloak\n" +
+        "\u2022 WordPress, Jira, Confluence, and 40+ more\n\n" +
+        "Filter by technology, platform, or reward type \u2014 then copy all subdomains in one click.\n\n" +
+        "\uD83D\uDD17 https://EsamLasheen.github.io/StackRecon/\n\u2B50 https://github.com/EsamLasheen/StackRecon\n\n" +
+        "#BugBounty #CyberSecurity #InfoSec #PenTest #HackerOne #Bugcrowd #OSINT"
+      )
+      : "Check out StackRecon \u2014 bug bounty technology intelligence:\nhttps://EsamLasheen.github.io/StackRecon/";
+
+    copyToClipboard(postText, null, "", "");
+
+    var linkedinUrl = "https://www.linkedin.com/sharing/share-offsite/?url=" +
+      encodeURIComponent("https://EsamLasheen.github.io/StackRecon/");
+    window.open(linkedinUrl, "_blank", "noopener,noreferrer");
+
+    shareBtn.classList.add("shared");
+    shareBtn.innerHTML = "\u2713 Post text copied \u2014 paste it in LinkedIn!";
+    setTimeout(function () {
+      shareBtn.classList.remove("shared");
+      shareBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;margin-right:5px"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>Share on LinkedIn';
+    }, 4000);
+  });
+  header.appendChild(shareBtn);
+  panel.appendChild(header);
+
+  // ---- Bars ----
+  var barsEl = el("div", { "class": "insights-bars" });
+
+  for (var k = 0; k < sorted.length; k++) {
+    (function (item, rank) {
+      var pct = Math.max(4, Math.round((item.count / maxCount) * 100));
+      var row = el("div", {
+        "class": "insight-row",
+        role: "button",
+        tabindex: "0",
+        title: "Filter by " + item.tech,
+        "aria-label": item.tech + ": " + item.count + " programs",
+      });
+
+      var labelEl = el("div", { "class": "insight-label" });
+      labelEl.appendChild(el("span", { "class": "insight-rank", text: "#" + (rank + 1) }));
+      labelEl.appendChild(el("span", { "class": "insight-tech", text: item.tech }));
+      row.appendChild(labelEl);
+
+      var barWrap = el("div", { "class": "insight-bar-wrap", "aria-hidden": "true" });
+      var bar = el("div", { "class": "insight-bar" });
+      bar.style.width = "0%";
+      barWrap.appendChild(bar);
+      row.appendChild(barWrap);
+
+      row.appendChild(el("span", {
+        "class": "insight-count",
+        text: item.count + " program" + (item.count !== 1 ? "s" : ""),
+      }));
+
+      // Animate bar in after mount
+      setTimeout(function () { bar.style.width = pct + "%"; }, 80 + rank * 50);
+
+      function activate() {
+        if (window.stackrecon && window.stackrecon._onInsightClick) {
+          window.stackrecon._onInsightClick(item.tech);
+        }
+      }
+      row.addEventListener("click", activate);
+      row.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(); }
+      });
+
+      barsEl.appendChild(row);
+    })(sorted[k], k);
+  }
+
+  panel.appendChild(barsEl);
+
+  // Expose update method for auto-refresh
+  panel.updateInsights = function (newPrograms) {
+    var newPanel = InsightsPanel(newPrograms);
+    panel.parentNode.replaceChild(newPanel, panel);
+  };
+
+  return panel;
+}
+
+// ============================================================
 // Export to window.stackrecon.components
 // ============================================================
 
@@ -414,4 +551,5 @@ window.stackrecon.components = {
   RewardBadge:     RewardBadge,
   ProgramCard:     ProgramCard,
   CopyAllBanner:   CopyAllBanner,
+  InsightsPanel:   InsightsPanel,
 };
