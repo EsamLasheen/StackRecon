@@ -155,7 +155,7 @@ def run_httpx_binary(
             ],
             capture_output=True,
             text=True,
-            timeout=7200,  # 2-hour hard cap for large scans
+            timeout=10800,  # 3-hour hard cap for large scans
         )
 
         detections: list[dict[str, Any]] = []
