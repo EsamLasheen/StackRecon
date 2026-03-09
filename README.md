@@ -1,28 +1,31 @@
 # StackRecon
 
-> Discover what technologies are running behind every public bug bounty program.
+> Bug bounty technology intelligence — powered by httpx + nuclei.
 
-**[🌐 Live Site](https://esamlasheen.github.io/StackRecon/)** · **[798 Programs](https://esamlasheen.github.io/StackRecon/)** · **[47+ Technologies](https://esamlasheen.github.io/StackRecon/)**
+**[🌐 Live Site](https://esamlasheen.github.io/StackRecon/)** · **[798 Programs](https://esamlasheen.github.io/StackRecon/)** · **[Daily Updates](https://esamlasheen.github.io/StackRecon/)**
 
 ---
 
 ## What is StackRecon?
 
-StackRecon scans all public bug bounty programs and detects the technologies running on their domains — helping bug hunters quickly find the right targets based on the tech stack they know best.
+StackRecon automatically scans every public bug bounty program and maps their entire tech stack — detecting 1,400+ technologies and real misconfigurations using industry-standard tools.
 
-**Find programs running Grafana, Jenkins, Keycloak, WordPress, and 44+ more technologies — instantly.**
-
-![StackRecon Screenshot](https://esamlasheen.github.io/StackRecon/)
+**Built for bug hunters who want to find the right targets fast.**
 
 ---
 
 ## Features
 
-- **47+ Technology Signatures** — Grafana, Jenkins, Keycloak, WordPress, GitLab, Jira, Confluence, Kibana, Elasticsearch, Spring Boot, Laravel, Django, Cloudflare, and more
-- **4 Combinable Filters** — filter by technology, platform, reward type, or company name
-- **Shareable Links** — filter state is saved in the URL hash, share searches with your team
-- **Weekly Auto-Updates** — data refreshes automatically every Sunday via GitHub Actions
-- **Fast & Offline-Capable** — pure static site, no backend, loads instantly
+- **1,400+ Technology Detection** — powered by [httpx](https://github.com/projectdiscovery/httpx) with Wappalyzer fingerprints
+- **Misconfiguration Detection** — [nuclei](https://github.com/projectdiscovery/nuclei) scans for exposed panels, default credentials, and misconfigs
+- **Severity Scoring** — programs ranked Critical / High / Medium based on real findings
+- **80+ Subdomain Prefixes** — probes `api.`, `admin.`, `grafana.`, `jenkins.`, `k8s.`, `vault.`, and more per domain
+- **Daily Auto-Updates** — GitHub Actions runs the full scan every day automatically
+- **5 Combinable Filters** — filter by technology, platform, reward type, severity, or name
+- **Copy All Subdomains** — select a technology, copy every matching subdomain in one click
+- **Shareable Links** — filter state saved in URL hash
+- **Auto-Refresh** — frontend silently updates every 15 minutes without page reload
+- **Pure Static Site** — no backend, no database, loads instantly
 
 ---
 
@@ -32,22 +35,45 @@ StackRecon scans all public bug bounty programs and detects the technologies run
 
 ---
 
-## Usage
+## How It Works
 
-### Run the Scanner Locally
+```
+GitHub Actions (daily at 02:00 UTC)
+  ↓
+Fetch 798 programs from Chaos ProjectDiscovery
+  ↓
+Generate ~64,000 subdomain candidates (80 prefixes × domains)
+  ↓
+httpx -tech-detect → 1,400+ Wappalyzer fingerprints
+  ↓
+nuclei (panel + exposure + misconfig + default-login templates)
+  ↓
+Severity scoring: Critical / High / Medium per program
+  ↓
+Commit data.json → GitHub Pages auto-deploys
+```
+
+---
+
+## Scanner Setup (local)
+
+Requires **httpx** and **nuclei** binaries on PATH:
 
 ```bash
+# Install Go tools
+go install github.com/projectdiscovery/httpx/cmd/httpx@latest
+go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+nuclei -update-templates
+
+# Clone and install Python deps
 git clone https://github.com/EsamLasheen/StackRecon.git
-cd StackRecon/scanner
-pip install -r requirements.txt
+cd StackRecon
+pip install -r scanner/requirements.txt
 
-# Scan all programs
-python3 -m scanner.main
-
-# Quick test with 10 programs
+# Quick test (10 programs)
 python3 -m scanner.main --limit 10
 
-# Custom workers and output
+# Full scan
 python3 -m scanner.main --workers 100 --output docs/data/data.json
 ```
 
@@ -56,62 +82,59 @@ python3 -m scanner.main --workers 100 --output docs/data/data.json
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--limit N` | all | Process at most N programs |
-| `--workers N` | 50 | Concurrent HTTP probe workers (1–500) |
-| `--connect-timeout S` | 3 | TCP connect timeout in seconds |
-| `--read-timeout S` | 7 | HTTP read timeout in seconds |
-| `--output PATH` | `docs/data/data.json` | Output file path |
+| `--workers N` | 50 | Concurrent threads |
+| `--connect-timeout S` | 3 | TCP connect timeout |
+| `--read-timeout S` | 7 | HTTP read timeout |
+| `--output PATH` | `docs/data/data.json` | Output file |
 
 ---
 
-## How It Works
+## Detection Coverage
 
-1. **Fetches** the public bug bounty program list from [Chaos ProjectDiscovery](https://github.com/projectdiscovery/public-bugbounty-programs)
-2. **Probes** each program's domains with 50 concurrent workers
-3. **Detects** technologies from HTTP headers and response bodies using 47+ YAML signatures
-4. **Writes** results to a single `data.json` file atomically
-5. **Serves** via GitHub Pages — no backend needed
-
----
-
-## Technology Detection
-
-StackRecon detects technologies across 12 categories:
+### Technologies (via httpx + Wappalyzer)
 
 | Category | Examples |
 |----------|---------|
-| Monitoring | Grafana, Prometheus, Kibana |
-| CI/CD | Jenkins, GitLab CI, ArgoCD, TeamCity |
-| Identity/Auth | Keycloak, HashiCorp Vault |
+| Monitoring | Grafana, Prometheus, Kibana, Datadog |
+| CI/CD | Jenkins, GitLab CI, ArgoCD, TeamCity, GoCD |
+| Identity/Auth | Keycloak, HashiCorp Vault, Okta |
 | CMS | WordPress, Drupal, Magento, Shopify |
-| Frameworks | Spring Boot, Django, Laravel, Rails |
-| Web Servers | Nginx, Apache, Traefik, HAProxy |
-| CDN | Cloudflare, Fastly, AWS ALB |
-| Search/Data | Elasticsearch, MinIO, Redis |
-| Containers | Portainer, Rancher |
-| Infrastructure | Consul, Nomad, etcd, RabbitMQ |
-| Artifact Registries | SonarQube, Nexus, Harbor |
-| DevOps/VCS | GitLab, Gitea, Bitbucket Server |
+| Frameworks | Spring Boot, Django, Laravel, Rails, Express |
+| Web Servers | Nginx, Apache, Traefik, HAProxy, Caddy |
+| CDN/Cloud | Cloudflare, Fastly, AWS ALB, Akamai |
+| Containers | Portainer, Rancher, Kubernetes Dashboard |
+| Infrastructure | Consul, Nomad, etcd, RabbitMQ, Kafka |
+| Registries | SonarQube, Nexus, Harbor, Artifactory |
+| + 1,390 more via Wappalyzer fingerprints |
+
+### Misconfigurations (via nuclei)
+
+- Exposed admin panels (Jenkins no-auth, Grafana anonymous access)
+- Default credentials on management interfaces
+- Exposed `.git` repositories and `.env` files
+- Spring Boot Actuator endpoints open
+- Elasticsearch / Kibana unauthenticated
+- phpMyAdmin publicly accessible
+- 8,000+ nuclei community templates
 
 ---
 
 ## Development
 
 ```bash
-# Run tests
+# Run tests (87%+ coverage)
 python3 -m pytest tests/unit/ tests/integration/ -q
 
-# Check coverage
-python3 -m pytest tests/unit/ --cov=scanner/src
-
-# Lint
-ruff check scanner/src/
+# Lint + format
+ruff check scanner/src/ scanner/main.py
+black --check scanner/src/ scanner/main.py
 ```
 
 ---
 
 ## Data Source
 
-Program data sourced from [Chaos ProjectDiscovery](https://chaos.projectdiscovery.io/) — the largest public bug bounty recon dataset.
+Program list sourced from [Chaos ProjectDiscovery](https://chaos.projectdiscovery.io/) — the largest public bug bounty recon dataset.
 
 ---
 
