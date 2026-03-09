@@ -9,23 +9,20 @@ from urllib.parse import urlparse
 
 from scanner.src.classifier import classify_platform, classify_reward_type
 from scanner.src.config import parse_cli_args
-from scanner.src.detector import run_httpx_binary
+from scanner.src.detector import run_httpx_binary, run_nuclei
 from scanner.src.fetcher import SourceUnavailableError, fetch_chaos_index
 from scanner.src.writer import write_atomic
 
-SCANNER_VERSION = "2.0.0"
+SCANNER_VERSION = "3.0.0"
+
+SEVERITY_ORDER = {"critical": 4, "high": 3, "medium": 2, "low": 1, "info": 0, "none": -1}
 
 
 def _hostnames_for_program(entry: dict) -> list[str]:
-    """Build a list of hostnames to probe from a Chaos program entry.
-
-    Tries domains list first; falls back to parsing the program URL host.
-    Generates common subdomain prefixes for each root domain.
-    """
+    """Build hostnames to probe from a Chaos program entry."""
     hostnames: list[str] = []
     domains = entry.get("domains", [])
 
-    # If no domains, extract from url
     if not domains:
         url = entry.get("url", "")
         if url:
@@ -180,15 +177,11 @@ def _hostnames_for_program(entry: dict) -> list[str]:
             hostname = f"{prefix}.{domain}" if prefix else domain
             hostnames.append(hostname)
 
-    return list(dict.fromkeys(hostnames))  # deduplicate, preserve order
+    return list(dict.fromkeys(hostnames))
 
 
 async def run(config) -> int:
-    """Main async scan pipeline.
-
-    Returns:
-        Exit code: 0=success, 1=source unavailable, 3=disk error.
-    """
+    """Main async scan pipeline."""
     print("Fetching Chaos program index…")
     try:
         index = await fetch_chaos_index(api_key=config.api_key, limit=config.limit)
@@ -246,11 +239,30 @@ async def run(config) -> int:
         timeout=config.connect_timeout + config.read_timeout,
     )
 
-    # Build hostname → detection lookup
     detection_map: dict[str, dict] = {d["hostname"]: d for d in raw_detections}
     total_detections = len(raw_detections)
+    print(f"httpx finished — {total_detections} hosts with tech detections.")
 
-    print(f"httpx finished — {total_detections} hosts with detections.")
+    # Run nuclei only on hosts that responded (much smaller set)
+    detected_hosts = list(detection_map.keys())
+    print(f"Running nuclei misconfig/exposure scan on {len(detected_hosts)} live hosts…")
+    nuclei_findings = run_nuclei(
+        hostnames=detected_hosts,
+        concurrency=config.workers,
+        rate_limit=200,
+        timeout=10,
+    )
+    print(f"Nuclei finished — {len(nuclei_findings)} findings.")
+
+    # Build nuclei lookup: hostname -> list of findings
+    nuclei_map: dict[str, list[dict]] = {}
+    for f in nuclei_findings:
+        h = f["hostname"]
+        if h not in nuclei_map:
+            nuclei_map[h] = []
+        nuclei_map[h].append(f)
+
+    total_vuln_findings = len(nuclei_findings)
 
     # Assemble per-program output
     programs_out: list[dict] = []
@@ -277,6 +289,20 @@ async def run(config) -> int:
             for d in prog_detections
         ]
 
+        # Gather nuclei findings for this program's hosts
+        prog_vulns: list[dict] = []
+        for h in meta["hostnames"]:
+            if h in nuclei_map:
+                prog_vulns.extend(nuclei_map[h])
+
+        # Compute highest severity
+        highest_severity = "none"
+        if prog_vulns:
+            highest_severity = max(
+                prog_vulns,
+                key=lambda v: SEVERITY_ORDER.get(v.get("severity", "info"), 0),
+            )["severity"]
+
         programs_out.append(
             {
                 "name": meta["name"],
@@ -288,6 +314,11 @@ async def run(config) -> int:
                 "subdomain_count": len(meta["hostnames"]),
                 "detection_count": len(prog_detections),
                 "detections": detections_out,
+                "severity": highest_severity,
+                "critical_count": sum(1 for v in prog_vulns if v["severity"] == "critical"),
+                "high_count": sum(1 for v in prog_vulns if v["severity"] == "high"),
+                "medium_count": sum(1 for v in prog_vulns if v["severity"] == "medium"),
+                "vulnerabilities": prog_vulns,
             }
         )
 
@@ -300,6 +331,7 @@ async def run(config) -> int:
             "programs_failed": programs_failed,
             "total_subdomains_probed": total_probed,
             "total_detections": total_detections,
+            "total_vuln_findings": total_vuln_findings,
             "scanner_version": SCANNER_VERSION,
             "workers_used": config.workers,
         },

@@ -462,6 +462,126 @@ a:hover {
   }
 }
 
+/* ---- Severity Badges & Colors ---------------------------- */
+
+.severity-badge {
+  font-weight: 700;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.sev-critical {
+  background-color: rgba(255, 56, 96, 0.18);
+  color: #ff3860;
+  border: 1px solid rgba(255, 56, 96, 0.5);
+  box-shadow: 0 0 8px rgba(255, 56, 96, 0.3);
+}
+
+.sev-high {
+  background-color: rgba(255, 140, 0, 0.15);
+  color: #ff8c00;
+  border: 1px solid rgba(255, 140, 0, 0.4);
+  box-shadow: 0 0 8px rgba(255, 140, 0, 0.25);
+}
+
+.sev-medium {
+  background-color: rgba(255, 204, 0, 0.12);
+  color: #e6b800;
+  border: 1px solid rgba(255, 204, 0, 0.4);
+}
+
+/* Card left border changes for severity */
+.sev-card-critical {
+  border-left-color: #ff3860 !important;
+}
+
+.sev-card-high {
+  border-left-color: #ff8c00 !important;
+}
+
+.sev-card-medium {
+  border-left-color: #e6b800 !important;
+}
+
+/* Vulnerability section in expanded card */
+.detections-list-wrap {
+  margin-top: var(--space-md);
+  border-top: 1px solid var(--border-color);
+  padding-top: var(--space-sm);
+}
+
+.vuln-section {
+  margin-bottom: var(--space-md);
+  background: rgba(255, 56, 96, 0.04);
+  border: 1px solid rgba(255, 56, 96, 0.2);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+}
+
+.vuln-section-title {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: #ff3860;
+  text-transform: uppercase;
+  margin-bottom: var(--space-sm);
+}
+
+.vuln-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 4px 0;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.vuln-name {
+  color: var(--text-primary);
+  flex: 1;
+  min-width: 0;
+}
+
+.vuln-host {
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  flex-shrink: 0;
+}
+
+.findings-stat {
+  color: #ff8c00;
+  font-weight: 600;
+}
+
+/* Insights severity stats row */
+.insights-severity-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(255, 56, 96, 0.04);
+  border: 1px solid rgba(255, 56, 96, 0.15);
+  border-radius: var(--radius-md);
+}
+
+.sev-stat {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.sev-stat strong {
+  font-weight: 700;
+}
+
+.sev-stat-critical { color: #ff3860; }
+.sev-stat-high     { color: #ff8c00; }
+.sev-stat-medium   { color: #e6b800; }
+
 /* ---- Layout ---------------------------------------------- */
 
 .layout {

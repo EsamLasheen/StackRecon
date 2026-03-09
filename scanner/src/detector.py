@@ -191,6 +191,94 @@ def run_httpx_binary(
 
 
 # ---------------------------------------------------------------------------
+# Nuclei misconfiguration / exposure scanner
+# ---------------------------------------------------------------------------
+
+
+def run_nuclei(
+    hostnames: list[str],
+    concurrency: int = 50,
+    rate_limit: int = 150,
+    timeout: int = 10,
+) -> list[dict[str, Any]]:
+    """Run nuclei with misconfiguration/exposure/default-login templates.
+
+    Args:
+        hostnames: Bare hostnames (no scheme) to scan.
+        concurrency: Parallel template executions.
+        rate_limit: Max requests per second.
+        timeout: Per-request timeout in seconds.
+
+    Returns:
+        List of finding dicts: hostname, template_id, name, severity, matched_at, description.
+    """
+    if not hostnames:
+        return []
+
+    tmpfile = Path(tempfile.mktemp(suffix=".txt"))
+    try:
+        # nuclei accepts bare hostnames directly
+        tmpfile.write_text("\n".join(hostnames) + "\n", encoding="utf-8")
+
+        result = subprocess.run(
+            [
+                "nuclei",
+                "-l",
+                str(tmpfile),
+                "-tags",
+                "panel,exposure,misconfig,default-login",
+                "-severity",
+                "critical,high,medium",
+                "-j",  # JSON output (short flag)
+                "-silent",
+                "-no-color",
+                "-c",
+                str(concurrency),
+                "-timeout",
+                str(timeout),
+                "-rate-limit",
+                str(rate_limit),
+                "-no-interactsh",
+                "-exclude-tags",
+                "dos,intrusive,fuzz,ssrf",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=7200,
+        )
+
+        findings: list[dict[str, Any]] = []
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                data = json.loads(line)
+                host = data.get("host", data.get("matched-at", ""))
+                # Strip scheme and path to get bare hostname
+                if "://" in host:
+                    host = host.split("://", 1)[1].split("/")[0].split(":")[0]
+
+                info = data.get("info", {})
+                findings.append(
+                    {
+                        "hostname": host,
+                        "template_id": data.get("template-id", ""),
+                        "name": info.get("name", ""),
+                        "severity": info.get("severity", "info").lower(),
+                        "matched_at": data.get("matched-at", ""),
+                        "description": info.get("description", ""),
+                    }
+                )
+            except json.JSONDecodeError:
+                continue
+
+        return findings
+    finally:
+        tmpfile.unlink(missing_ok=True)
+
+
+# ---------------------------------------------------------------------------
 # Live HTTP probe (legacy / test fallback)
 # ---------------------------------------------------------------------------
 

@@ -192,18 +192,29 @@ function ProgramCard(program, activeTech) {
   activeTech = activeTech || null;
 
   var card = el("div", {
-    "class": "program-card",
+    "class": "program-card" + (program.severity && program.severity !== "none" ? " has-findings sev-card-" + program.severity : ""),
     role: "button",
     tabindex: "0",
     "data-program-name": program.name,
     "aria-label": program.name + " — " + (program.technologies.join(", ") || "no technologies detected"),
   });
 
-  // ---- Card header row: name (left) + copy button (right) ----
+  // ---- Card header row ----
   var header = el("div", { "class": "card-header" });
   header.appendChild(el("h3", { "class": "card-title", text: program.name }));
 
-  // Build list of hostnames filtered by activeTech
+  // Severity badge
+  if (program.severity && program.severity !== "none") {
+    var sevLabel = program.severity.toUpperCase();
+    if (program.critical_count > 0) sevLabel += " (" + program.critical_count + "C)";
+    else if (program.high_count > 0) sevLabel += " (" + program.high_count + "H)";
+    var sevBadge = el("span", {
+      "class": "badge severity-badge sev-" + program.severity,
+      text: sevLabel,
+    });
+    header.appendChild(sevBadge);
+  }
+
   function getFilteredHostnames() {
     var dets = activeTech
       ? program.detections.filter(function (d) { return d.technologies.includes(activeTech); })
@@ -234,6 +245,11 @@ function ProgramCard(program, activeTech) {
   if (program.detection_count > 0) {
     meta.appendChild(el("span", { "class": "card-meta-stat", text: program.detection_count + " detections" }));
   }
+  var totalFindings = (program.critical_count || 0) + (program.high_count || 0) + (program.medium_count || 0);
+  if (totalFindings > 0) {
+    var findingsStat = el("span", { "class": "card-meta-stat findings-stat", text: totalFindings + " findings" });
+    meta.appendChild(findingsStat);
+  }
   card.appendChild(meta);
 
   // ---- Tech badges row ----
@@ -249,7 +265,6 @@ function ProgramCard(program, activeTech) {
   var detectionsList = null;
 
   function toggleDetections(e) {
-    // Do not toggle if the copy button was clicked
     if (e && e.target && e.target.closest && e.target.closest(".btn-copy-card, .btn-copy-hostname")) return;
 
     if (detectionsList) {
@@ -263,40 +278,77 @@ function ProgramCard(program, activeTech) {
       ? program.detections.filter(function (d) { return d.technologies.includes(activeTech); })
       : program.detections;
 
-    if (filtered.length === 0) return;
+    var vulns = (program.vulnerabilities || []).filter(function(v) {
+      return !activeTech || (v.technologies && v.technologies.indexOf(activeTech) !== -1);
+    });
+    // When no tech filter, show all vulns
+    if (!activeTech) vulns = program.vulnerabilities || [];
+
+    if (filtered.length === 0 && vulns.length === 0) return;
 
     card.setAttribute("aria-expanded", "true");
-    detectionsList = el("ul", { "class": "detections-list", "aria-label": "Detected subdomains for " + program.name });
+    detectionsList = el("div", { "class": "detections-list-wrap" });
 
-    for (var di = 0; di < filtered.length; di++) {
-      (function (det) {
-        var item = el("li", { "class": "detection-item" });
+    // Vulnerability findings section (shown first)
+    if (vulns.length > 0) {
+      var vulnSection = el("div", { "class": "vuln-section" });
+      vulnSection.appendChild(el("div", { "class": "vuln-section-title", text: "\u26A0 SECURITY FINDINGS (" + vulns.length + ")" }));
+      for (var vi = 0; vi < vulns.length; vi++) {
+        (function (vuln) {
+          var vitem = el("div", { "class": "vuln-item" });
+          vitem.appendChild(el("span", { "class": "badge severity-badge sev-" + vuln.severity, text: vuln.severity.toUpperCase() }));
+          vitem.appendChild(el("span", { "class": "vuln-name", text: vuln.name }));
+          vitem.appendChild(el("span", { "class": "vuln-host", text: vuln.hostname }));
 
-        var hostname = el("span", { "class": "detection-hostname", text: det.hostname, title: det.hostname });
-        item.appendChild(hostname);
+          var vcopy = el("button", {
+            "class": "btn-copy-hostname",
+            type: "button",
+            "aria-label": "Copy URL",
+            title: vuln.matched_at || vuln.hostname,
+          });
+          vcopy.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+          vcopy.addEventListener("click", function (e) {
+            e.stopPropagation();
+            copyToClipboard(vuln.matched_at || vuln.hostname, vcopy, "\u29c9", "✓");
+          });
+          vitem.appendChild(vcopy);
+          vulnSection.appendChild(vitem);
+        })(vulns[vi]);
+      }
+      detectionsList.appendChild(vulnSection);
+    }
 
-        var detBadges = el("span", { "class": "detection-badges" });
-        for (var bi = 0; bi < det.technologies.length; bi++) {
-          detBadges.appendChild(TechBadge(det.technologies[bi], det.technologies[bi] === activeTech));
-        }
-        item.appendChild(detBadges);
+    // Tech detections section
+    if (filtered.length > 0) {
+      var detList = el("ul", { "class": "detections-list", "aria-label": "Detected subdomains" });
+      for (var di = 0; di < filtered.length; di++) {
+        (function (det) {
+          var item = el("li", { "class": "detection-item" });
+          var hostname = el("span", { "class": "detection-hostname", text: det.hostname, title: det.hostname });
+          item.appendChild(hostname);
 
-        // Per-hostname copy button
-        var hCopyBtn = el("button", {
-          "class": "btn-copy-hostname",
-          type: "button",
-          "aria-label": "Copy " + det.hostname,
-          title: "Copy hostname",
-        });
-        hCopyBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
-        hCopyBtn.addEventListener("click", function (e) {
-          e.stopPropagation();
-          copyToClipboard(det.hostname, hCopyBtn, "\u29c9", "✓");
-        });
-        item.appendChild(hCopyBtn);
+          var detBadges = el("span", { "class": "detection-badges" });
+          for (var bi = 0; bi < det.technologies.length; bi++) {
+            detBadges.appendChild(TechBadge(det.technologies[bi], det.technologies[bi] === activeTech));
+          }
+          item.appendChild(detBadges);
 
-        detectionsList.appendChild(item);
-      })(filtered[di]);
+          var hCopyBtn = el("button", {
+            "class": "btn-copy-hostname",
+            type: "button",
+            "aria-label": "Copy " + det.hostname,
+            title: "Copy hostname",
+          });
+          hCopyBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+          hCopyBtn.addEventListener("click", function (e) {
+            e.stopPropagation();
+            copyToClipboard(det.hostname, hCopyBtn, "\u29c9", "✓");
+          });
+          item.appendChild(hCopyBtn);
+          detList.appendChild(item);
+        })(filtered[di]);
+      }
+      detectionsList.appendChild(detList);
     }
 
     card.appendChild(detectionsList);
@@ -479,6 +531,38 @@ function InsightsPanel(programs) {
   });
   header.appendChild(shareBtn);
   panel.appendChild(header);
+
+  // ---- Critical stats row ----
+  var totalCritical = 0;
+  var totalHigh = 0;
+  var totalMedium = 0;
+  for (var ci = 0; ci < programs.length; ci++) {
+    totalCritical += programs[ci].critical_count || 0;
+    totalHigh += programs[ci].high_count || 0;
+    totalMedium += programs[ci].medium_count || 0;
+  }
+  var programsWithCritical = programs.filter(function(p) { return (p.critical_count || 0) > 0; }).length;
+  var programsWithHigh = programs.filter(function(p) { return (p.high_count || 0) > 0; }).length;
+
+  if (totalCritical + totalHigh + totalMedium > 0) {
+    var statsRow = el("div", { "class": "insights-severity-row" });
+    if (totalCritical > 0) {
+      var critStat = el("span", { "class": "sev-stat sev-stat-critical" });
+      critStat.innerHTML = "<strong>" + totalCritical + "</strong> critical findings in <strong>" + programsWithCritical + "</strong> programs";
+      statsRow.appendChild(critStat);
+    }
+    if (totalHigh > 0) {
+      var highStat = el("span", { "class": "sev-stat sev-stat-high" });
+      highStat.innerHTML = "<strong>" + totalHigh + "</strong> high findings in <strong>" + programsWithHigh + "</strong> programs";
+      statsRow.appendChild(highStat);
+    }
+    if (totalMedium > 0) {
+      var medStat = el("span", { "class": "sev-stat sev-stat-medium" });
+      medStat.innerHTML = "<strong>" + totalMedium + "</strong> medium";
+      statsRow.appendChild(medStat);
+    }
+    panel.appendChild(statsRow);
+  }
 
   // ---- Bars ----
   var barsEl = el("div", { "class": "insights-bars" });

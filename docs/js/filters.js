@@ -1,15 +1,10 @@
 /**
  * StackRecon — Filter Logic + Inverted Index
- * Builds O(1) Map-based indices for technology, platform, and reward filters.
  */
 
 "use strict";
 
 window.stackrecon = window.stackrecon || {};
-
-// ============================================================
-// Index builders
-// ============================================================
 
 function buildTechIndex(programs) {
   const index = new Map();
@@ -42,9 +37,20 @@ function buildRewardIndex(programs) {
   return index;
 }
 
-// ============================================================
-// Helpers
-// ============================================================
+function buildSeverityIndex(programs) {
+  const index = new Map();
+  const SEVERITY_ORDER = { critical: 4, high: 3, medium: 2, low: 1, info: 0, none: -1 };
+  // "findings" = any program with severity != "none"
+  const withFindings = new Set();
+  programs.forEach((program, i) => {
+    const sev = program.severity || "none";
+    if (!index.has(sev)) index.set(sev, new Set());
+    index.get(sev).add(i);
+    if (SEVERITY_ORDER[sev] >= 0) withFindings.add(i);
+  });
+  index.set("findings", withFindings);
+  return index;
+}
 
 function intersect(setA, setB) {
   if (!setA) return new Set(setB);
@@ -64,15 +70,11 @@ function getAllTechnologies(programs) {
   return [...techs].sort((a, b) => a.localeCompare(b));
 }
 
-// ============================================================
-// Combined filter application (AND logic across all active filters)
-// ============================================================
-
 function applyAllFilters(state) {
-  const { techIndex, platformIndex, rewardIndex, programs, activeFilters } = state;
+  const { techIndex, platformIndex, rewardIndex, severityIndex, programs, activeFilters } = state;
   const total = programs.length;
 
-  let result = null; // null = "all"
+  let result = null;
 
   if (activeFilters.tech) {
     result = intersect(result, techIndex.get(activeFilters.tech) ?? new Set());
@@ -83,8 +85,10 @@ function applyAllFilters(state) {
   if (activeFilters.reward) {
     result = intersect(result, rewardIndex.get(activeFilters.reward) ?? new Set());
   }
+  if (activeFilters.severity && severityIndex) {
+    result = intersect(result, severityIndex.get(activeFilters.severity) ?? new Set());
+  }
 
-  // Name search (applied after index intersection)
   let indices = result ? [...result] : Array.from({ length: total }, (_, i) => i);
 
   if (activeFilters.name && activeFilters.name.length >= 2) {
@@ -92,17 +96,22 @@ function applyAllFilters(state) {
     indices = indices.filter((i) => programs[i].name.toLowerCase().includes(q));
   }
 
+  // Sort: critical first, then high, medium, none
+  const SEVERITY_ORDER = { critical: 4, high: 3, medium: 2, low: 1, info: 0, none: -1 };
+  indices.sort((a, b) => {
+    const sa = SEVERITY_ORDER[programs[a].severity] || -1;
+    const sb = SEVERITY_ORDER[programs[b].severity] || -1;
+    return sb - sa;
+  });
+
   return indices;
 }
-
-// ============================================================
-// Export
-// ============================================================
 
 window.stackrecon.filters = {
   buildTechIndex,
   buildPlatformIndex,
   buildRewardIndex,
+  buildSeverityIndex,
   intersect,
   getAllTechnologies,
   applyAllFilters,

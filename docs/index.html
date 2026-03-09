@@ -62,6 +62,17 @@
       </section>
 
       <section class="filter-group">
+        <label for="severity-filter" class="filter-label">Severity</label>
+        <select id="severity-filter" class="filter-select">
+          <option value="">All severities</option>
+          <option value="critical">🔴 Critical</option>
+          <option value="high">🟠 High</option>
+          <option value="medium">🟡 Medium</option>
+          <option value="findings">Has Findings</option>
+        </select>
+      </section>
+
+      <section class="filter-group">
         <label for="name-search" class="filter-label">Program Name</label>
         <input
           type="text"

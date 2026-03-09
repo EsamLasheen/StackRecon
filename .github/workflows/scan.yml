@@ -1,4 +1,4 @@
-name: Weekly Scan
+name: Daily Scan
 
 on:
   schedule:
@@ -35,6 +35,11 @@ jobs:
         run: |
           go install github.com/projectdiscovery/httpx/cmd/httpx@latest
           echo "$HOME/go/bin" >> $GITHUB_PATH
+
+      - name: Install nuclei
+        run: |
+          go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+          nuclei -update-templates -ut 2>/dev/null || true
 
       - name: Run scanner
         run: |
