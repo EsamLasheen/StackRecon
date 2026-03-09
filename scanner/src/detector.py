@@ -151,11 +151,13 @@ def run_httpx_binary(
                 str(threads),
                 "-timeout",
                 str(timeout),
+                "-retries",
+                "0",  # no retries — failed hosts counted once, not twice
                 "-follow-redirects",
             ],
             capture_output=True,
             text=True,
-            timeout=10800,  # 3-hour hard cap for large scans
+            timeout=14400,  # 4-hour hard cap (scan should finish in <30 min)
         )
 
         detections: list[dict[str, Any]] = []

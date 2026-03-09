@@ -46,11 +46,15 @@ jobs:
           if [ -n "${{ github.event.inputs.limit }}" ]; then
             python3 -m scanner.main \
               --limit ${{ github.event.inputs.limit }} \
-              --workers 100 \
+              --workers 300 \
+              --connect-timeout 1 \
+              --read-timeout 3 \
               --output docs/data/data.json
           else
             python3 -m scanner.main \
-              --workers 100 \
+              --workers 300 \
+              --connect-timeout 1 \
+              --read-timeout 3 \
               --output docs/data/data.json
           fi
 
