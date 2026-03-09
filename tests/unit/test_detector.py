@@ -1,6 +1,8 @@
 """Unit tests for scanner.src.detector — TDD: written before implementation."""
 
+import json
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 import respx
@@ -11,6 +13,8 @@ from scanner.src.detector import (
     detect_offline,
     probe_subdomain,
     detect_all,
+    run_httpx_binary,
+    run_nuclei,
 )
 
 
@@ -216,3 +220,115 @@ async def test_detect_all_returns_only_detected_subdomains():
     )
     assert len(results) == 1
     assert results[0]["hostname"] == "grafana.example.com"
+
+
+# ---------------------------------------------------------------------------
+# run_httpx_binary tests
+# ---------------------------------------------------------------------------
+
+def _make_httpx_line(host, techs):
+    return json.dumps({"input": host, "tech": techs, "status-code": 200})
+
+
+def test_run_httpx_binary_empty_returns_empty():
+    """Empty hostname list returns empty list without calling subprocess."""
+    result = run_httpx_binary([])
+    assert result == []
+
+
+def test_run_httpx_binary_parses_output():
+    """Parses httpx JSON output and strips version numbers."""
+    mock_result = MagicMock()
+    mock_result.stdout = "\n".join([
+        _make_httpx_line("grafana.example.com", ["Grafana:9.0", "Nginx:1.18"]),
+        _make_httpx_line("api.example.com", ["Django:4.2"]),
+        "",  # blank line should be skipped
+    ])
+    with patch("scanner.src.detector.subprocess.run", return_value=mock_result):
+        results = run_httpx_binary(["grafana.example.com", "api.example.com"])
+
+    assert len(results) == 2
+    grafana = next(r for r in results if r["hostname"] == "grafana.example.com")
+    assert "Grafana" in grafana["technologies"]
+    assert "Nginx" in grafana["technologies"]
+    # Version stripped
+    assert not any(":" in t for t in grafana["technologies"])
+
+
+def test_run_httpx_binary_skips_no_tech_lines():
+    """Hosts with empty tech list are excluded from results."""
+    mock_result = MagicMock()
+    mock_result.stdout = json.dumps({"input": "plain.example.com", "tech": [], "status-code": 200})
+    with patch("scanner.src.detector.subprocess.run", return_value=mock_result):
+        results = run_httpx_binary(["plain.example.com"])
+    assert results == []
+
+
+def test_run_httpx_binary_skips_invalid_json():
+    """Lines that are not valid JSON are silently skipped."""
+    mock_result = MagicMock()
+    mock_result.stdout = "not json\n" + _make_httpx_line("ok.example.com", ["Nginx"])
+    with patch("scanner.src.detector.subprocess.run", return_value=mock_result):
+        results = run_httpx_binary(["ok.example.com"])
+    assert len(results) == 1
+    assert results[0]["hostname"] == "ok.example.com"
+
+
+# ---------------------------------------------------------------------------
+# run_nuclei tests
+# ---------------------------------------------------------------------------
+
+def _make_nuclei_line(host, template_id, name, severity, matched_at=""):
+    return json.dumps({
+        "host": host,
+        "template-id": template_id,
+        "info": {"name": name, "severity": severity, "description": ""},
+        "matched-at": matched_at or host,
+    })
+
+
+def test_run_nuclei_empty_returns_empty():
+    """Empty hostname list returns empty without subprocess call."""
+    result = run_nuclei([])
+    assert result == []
+
+
+def test_run_nuclei_parses_findings():
+    """Parses nuclei JSON output into structured finding dicts."""
+    mock_result = MagicMock()
+    mock_result.stdout = "\n".join([
+        _make_nuclei_line("http://grafana.example.com", "grafana-default-login",
+                          "Grafana Default Login", "high", "http://grafana.example.com/login"),
+        _make_nuclei_line("http://jenkins.example.com", "jenkins-unauth",
+                          "Jenkins Unauthenticated Access", "critical"),
+    ])
+    with patch("scanner.src.detector.subprocess.run", return_value=mock_result):
+        findings = run_nuclei(["grafana.example.com", "jenkins.example.com"])
+
+    assert len(findings) == 2
+    severities = {f["severity"] for f in findings}
+    assert "high" in severities
+    assert "critical" in severities
+
+
+def test_run_nuclei_strips_scheme_from_hostname():
+    """Hostname in finding has scheme stripped."""
+    mock_result = MagicMock()
+    mock_result.stdout = _make_nuclei_line(
+        "http://admin.example.com", "exposed-panel", "Exposed Panel", "medium"
+    )
+    with patch("scanner.src.detector.subprocess.run", return_value=mock_result):
+        findings = run_nuclei(["admin.example.com"])
+
+    assert findings[0]["hostname"] == "admin.example.com"
+
+
+def test_run_nuclei_skips_invalid_json():
+    """Invalid JSON lines are silently ignored."""
+    mock_result = MagicMock()
+    mock_result.stdout = "bad line\n" + _make_nuclei_line(
+        "http://ok.example.com", "test-id", "Test", "medium"
+    )
+    with patch("scanner.src.detector.subprocess.run", return_value=mock_result):
+        findings = run_nuclei(["ok.example.com"])
+    assert len(findings) == 1
