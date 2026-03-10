@@ -246,11 +246,13 @@ def run_nuclei(
             "dos,intrusive,fuzz,ssrf",
         ]
 
-        # Stream stdout line-by-line via Popen so findings are captured
-        # even if nuclei is killed on timeout.
+        # Use threading to read stdout so we can enforce a hard timeout
+        # even when nuclei produces no output (blocking readline).
+        import queue
+        import threading
         import time as _time
 
-        deadline = _time.monotonic() + 5400  # 90-min hard cap
+        timeout_sec = 5400  # 90-min hard cap
         findings: list[dict[str, Any]] = []
 
         proc = subprocess.Popen(
@@ -259,10 +261,35 @@ def run_nuclei(
             stderr=subprocess.DEVNULL,
             text=True,
         )
+
+        line_queue: queue.Queue[str | None] = queue.Queue()
+
+        def _reader() -> None:
+            """Read lines from proc.stdout and put them on the queue."""
+            try:
+                for ln in proc.stdout:  # type: ignore[union-attr]
+                    line_queue.put(ln)
+            except ValueError:
+                pass  # stdout closed after kill
+            finally:
+                line_queue.put(None)  # sentinel: EOF
+
+        reader_thread = threading.Thread(target=_reader, daemon=True)
+        reader_thread.start()
+
+        deadline = _time.monotonic() + timeout_sec
         try:
-            for line in proc.stdout:  # type: ignore[union-attr]
-                if _time.monotonic() > deadline:
+            while True:
+                remaining = deadline - _time.monotonic()
+                if remaining <= 0:
                     break
+                try:
+                    line = line_queue.get(timeout=min(remaining, 5.0))
+                except queue.Empty:
+                    continue  # check deadline again
+                if line is None:
+                    break  # nuclei finished naturally
+
                 line = line.strip()
                 if not line:
                     continue
