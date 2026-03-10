@@ -147,7 +147,7 @@ def run_httpx_binary(
                 "-json",
                 "-silent",
                 "-no-color",
-                "-threads",
+                "-t",
                 str(threads),
                 "-timeout",
                 str(timeout),
@@ -222,35 +222,47 @@ def run_nuclei(
         # nuclei accepts bare hostnames directly
         tmpfile.write_text("\n".join(hostnames) + "\n", encoding="utf-8")
 
-        result = subprocess.run(
-            [
-                "nuclei",
-                "-l",
-                str(tmpfile),
-                "-tags",
-                "panel,exposure,misconfig,default-login",
-                "-severity",
-                "critical,high,medium",
-                "-j",  # JSON output (short flag)
-                "-silent",
-                "-no-color",
-                "-c",
-                str(concurrency),
-                "-timeout",
-                str(timeout),
-                "-rate-limit",
-                str(rate_limit),
-                "-no-interactsh",
-                "-exclude-tags",
-                "dos,intrusive,fuzz,ssrf",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=7200,
-        )
+        cmd = [
+            "nuclei",
+            "-l",
+            str(tmpfile),
+            "-tags",
+            "panel,exposure,misconfig,default-login",
+            "-severity",
+            "critical,high,medium",
+            "-j",  # JSON output (short flag)
+            "-silent",
+            "-no-color",
+            "-c",
+            str(concurrency),
+            "-bs",
+            str(concurrency),  # bulk-size: hosts per template in parallel
+            "-timeout",
+            str(timeout),
+            "-rl",
+            str(rate_limit),
+            "-no-interactsh",
+            "-exclude-tags",
+            "dos,intrusive,fuzz,ssrf",
+        ]
+
+        stdout = ""
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=5400,  # 90-min hard cap
+            )
+            stdout = result.stdout
+        except subprocess.TimeoutExpired as exc:
+            # Capture partial results — nuclei streams JSON line-by-line
+            stdout = exc.stdout or ""
+            if isinstance(stdout, bytes):
+                stdout = stdout.decode("utf-8", errors="replace")
 
         findings: list[dict[str, Any]] = []
-        for line in result.stdout.splitlines():
+        for line in stdout.splitlines():
             line = line.strip()
             if not line:
                 continue
