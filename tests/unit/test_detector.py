@@ -293,16 +293,24 @@ def test_run_nuclei_empty_returns_empty():
     assert result == []
 
 
+def _mock_popen(stdout_text):
+    """Create a mock Popen that yields stdout lines and supports kill/wait."""
+    mock_proc = MagicMock()
+    mock_proc.stdout = iter(stdout_text.splitlines(keepends=True))
+    mock_proc.kill = MagicMock()
+    mock_proc.wait = MagicMock()
+    return mock_proc
+
+
 def test_run_nuclei_parses_findings():
     """Parses nuclei JSON output into structured finding dicts."""
-    mock_result = MagicMock()
-    mock_result.stdout = "\n".join([
+    stdout = "\n".join([
         _make_nuclei_line("http://grafana.example.com", "grafana-default-login",
                           "Grafana Default Login", "high", "http://grafana.example.com/login"),
         _make_nuclei_line("http://jenkins.example.com", "jenkins-unauth",
                           "Jenkins Unauthenticated Access", "critical"),
     ])
-    with patch("scanner.src.detector.subprocess.run", return_value=mock_result):
+    with patch("scanner.src.detector.subprocess.Popen", return_value=_mock_popen(stdout)):
         findings = run_nuclei(["grafana.example.com", "jenkins.example.com"])
 
     assert len(findings) == 2
@@ -313,11 +321,10 @@ def test_run_nuclei_parses_findings():
 
 def test_run_nuclei_strips_scheme_from_hostname():
     """Hostname in finding has scheme stripped."""
-    mock_result = MagicMock()
-    mock_result.stdout = _make_nuclei_line(
+    stdout = _make_nuclei_line(
         "http://admin.example.com", "exposed-panel", "Exposed Panel", "medium"
     )
-    with patch("scanner.src.detector.subprocess.run", return_value=mock_result):
+    with patch("scanner.src.detector.subprocess.Popen", return_value=_mock_popen(stdout)):
         findings = run_nuclei(["admin.example.com"])
 
     assert findings[0]["hostname"] == "admin.example.com"
@@ -325,10 +332,9 @@ def test_run_nuclei_strips_scheme_from_hostname():
 
 def test_run_nuclei_skips_invalid_json():
     """Invalid JSON lines are silently ignored."""
-    mock_result = MagicMock()
-    mock_result.stdout = "bad line\n" + _make_nuclei_line(
+    stdout = "bad line\n" + _make_nuclei_line(
         "http://ok.example.com", "test-id", "Test", "medium"
     )
-    with patch("scanner.src.detector.subprocess.run", return_value=mock_result):
+    with patch("scanner.src.detector.subprocess.Popen", return_value=_mock_popen(stdout)):
         findings = run_nuclei(["ok.example.com"])
     assert len(findings) == 1

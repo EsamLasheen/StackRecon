@@ -246,46 +246,48 @@ def run_nuclei(
             "dos,intrusive,fuzz,ssrf",
         ]
 
-        stdout = ""
-        try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=5400,  # 90-min hard cap
-            )
-            stdout = result.stdout
-        except subprocess.TimeoutExpired as exc:
-            # Capture partial results — nuclei streams JSON line-by-line
-            stdout = exc.stdout or ""
-            if isinstance(stdout, bytes):
-                stdout = stdout.decode("utf-8", errors="replace")
+        # Stream stdout line-by-line via Popen so findings are captured
+        # even if nuclei is killed on timeout.
+        import time as _time
 
+        deadline = _time.monotonic() + 5400  # 90-min hard cap
         findings: list[dict[str, Any]] = []
-        for line in stdout.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                data = json.loads(line)
-                host = data.get("host", data.get("matched-at", ""))
-                # Strip scheme and path to get bare hostname
-                if "://" in host:
-                    host = host.split("://", 1)[1].split("/")[0].split(":")[0]
 
-                info = data.get("info", {})
-                findings.append(
-                    {
-                        "hostname": host,
-                        "template_id": data.get("template-id", ""),
-                        "name": info.get("name", ""),
-                        "severity": info.get("severity", "info").lower(),
-                        "matched_at": data.get("matched-at", ""),
-                        "description": info.get("description", ""),
-                    }
-                )
-            except json.JSONDecodeError:
-                continue
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+        try:
+            for line in proc.stdout:  # type: ignore[union-attr]
+                if _time.monotonic() > deadline:
+                    break
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                    host = data.get("host", data.get("matched-at", ""))
+                    if "://" in host:
+                        host = host.split("://", 1)[1].split("/")[0].split(":")[0]
+
+                    info = data.get("info", {})
+                    findings.append(
+                        {
+                            "hostname": host,
+                            "template_id": data.get("template-id", ""),
+                            "name": info.get("name", ""),
+                            "severity": info.get("severity", "info").lower(),
+                            "matched_at": data.get("matched-at", ""),
+                            "description": info.get("description", ""),
+                        }
+                    )
+                except json.JSONDecodeError:
+                    continue
+        finally:
+            proc.kill()
+            proc.wait()
 
         return findings
     finally:
