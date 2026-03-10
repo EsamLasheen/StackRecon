@@ -234,13 +234,27 @@ async def run(config) -> int:
         "programs": programs_out,
     }
 
+    # Write full private report (includes matched_at URLs, vuln details)
+    private_path = config.output.replace(".json", "-full.json")
+    try:
+        write_atomic(data, private_path)
+        print(f"Full report (private): {private_path}")
+    except OSError as exc:
+        print(f"[WARN] Failed to write private report: {exc}", file=sys.stderr)
+
+    # Strip sensitive nuclei details for public data.json
+    for prog in programs_out:
+        prog.pop("vulnerabilities", None)
+        # Keep severity + counts (safe aggregate stats), remove exploit details
+
     try:
         write_atomic(data, config.output)
     except OSError as exc:
         print(f"[ERROR] Failed to write output: {exc}", file=sys.stderr)
         return 3
 
-    print(f"\nDone. {len(programs_out)} programs written to {config.output}")
+    print(f"Public report: {config.output}")
+    print(f"\nDone. {len(programs_out)} programs written.")
     return 0
 
 

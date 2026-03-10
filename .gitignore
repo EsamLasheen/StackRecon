@@ -22,6 +22,7 @@ htmlcov/
 
 # Scanner temp files only (data.json is committed by CI)
 docs/data/*.tmp
+docs/data/data-full.json
 
 # Secrets / env
 .env

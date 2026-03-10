@@ -58,6 +58,13 @@ jobs:
               --output docs/data/data.json
           fi
 
+      - name: Upload full report (private — only repo owner can download)
+        uses: actions/upload-artifact@v4
+        with:
+          name: stackrecon-full-report-${{ github.run_id }}
+          path: docs/data/data-full.json
+          retention-days: 90
+
       - name: Commit updated data.json
         run: |
           git config user.name "github-actions[bot]"
