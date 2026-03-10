@@ -2,7 +2,7 @@
 
 > Bug bounty technology intelligence — powered by httpx + nuclei.
 
-**[🌐 Live Site](https://esamlasheen.github.io/StackRecon/)** · **[798 Programs](https://esamlasheen.github.io/StackRecon/)** · **[Daily Updates](https://esamlasheen.github.io/StackRecon/)**
+**[🌐 Live Site](https://esamlasheen.github.io/StackRecon/)** · **[798 Programs](https://esamlasheen.github.io/StackRecon/)** · **[6,000+ Live Hosts](https://esamlasheen.github.io/StackRecon/)** · **[Daily Updates](https://esamlasheen.github.io/StackRecon/)**
 
 ---
 
@@ -19,7 +19,7 @@ StackRecon automatically scans every public bug bounty program and maps their en
 - **1,400+ Technology Detection** — powered by [httpx](https://github.com/projectdiscovery/httpx) with Wappalyzer fingerprints
 - **Misconfiguration Detection** — [nuclei](https://github.com/projectdiscovery/nuclei) scans for exposed panels, default credentials, and misconfigs
 - **Severity Scoring** — programs ranked Critical / High / Medium based on real findings
-- **80+ Subdomain Prefixes** — probes `api.`, `admin.`, `grafana.`, `jenkins.`, `k8s.`, `vault.`, and more per domain
+- **24 Targeted Subdomain Prefixes** — probes `api.`, `admin.`, `grafana.`, `jenkins.`, `k8s.`, `vault.`, and more per domain
 - **Daily Auto-Updates** — GitHub Actions runs the full scan every day automatically
 - **5 Combinable Filters** — filter by technology, platform, reward type, severity, or name
 - **Copy All Subdomains** — select a technology, copy every matching subdomain in one click
@@ -42,7 +42,7 @@ GitHub Actions (daily at 02:00 UTC)
   ↓
 Fetch 798 programs from Chaos ProjectDiscovery
   ↓
-Generate ~64,000 subdomain candidates (80 prefixes × domains)
+Generate ~102,000 subdomain candidates (24 security-focused prefixes × domains)
   ↓
 httpx -tech-detect → 1,400+ Wappalyzer fingerprints
   ↓
@@ -95,17 +95,19 @@ python3 -m scanner.main --workers 100 --output docs/data/data.json
 
 | Category | Examples |
 |----------|---------|
-| Monitoring | Grafana, Prometheus, Kibana, Datadog |
-| CI/CD | Jenkins, GitLab CI, ArgoCD, TeamCity, GoCD |
-| Identity/Auth | Keycloak, HashiCorp Vault, Okta |
-| CMS | WordPress, Drupal, Magento, Shopify |
-| Frameworks | Spring Boot, Django, Laravel, Rails, Express |
-| Web Servers | Nginx, Apache, Traefik, HAProxy, Caddy |
-| CDN/Cloud | Cloudflare, Fastly, AWS ALB, Akamai |
-| Containers | Portainer, Rancher, Kubernetes Dashboard |
-| Infrastructure | Consul, Nomad, etcd, RabbitMQ, Kafka |
-| Registries | SonarQube, Nexus, Harbor, Artifactory |
-| + 1,390 more via Wappalyzer fingerprints |
+| Monitoring | Grafana, Prometheus, Kibana, Datadog, Zabbix, Nagios |
+| CI/CD | Jenkins, GitLab CI, ArgoCD, TeamCity, GoCD, Bamboo |
+| Identity/Auth | Keycloak, HashiCorp Vault, Okta, Auth0, ForgeRock |
+| CMS | WordPress, Drupal, Magento, Shopify, Joomla, Ghost |
+| Frameworks | Spring Boot, Django, Laravel, Rails, Express, Next.js, Nuxt |
+| Web Servers | Nginx, Apache, Traefik, HAProxy, Caddy, LiteSpeed |
+| CDN/Cloud | Cloudflare, Fastly, AWS ALB, Akamai, Azure CDN |
+| Containers | Portainer, Rancher, Kubernetes Dashboard, Docker Registry |
+| Infrastructure | Consul, Nomad, etcd, RabbitMQ, Kafka, Redis |
+| Databases | MySQL, PostgreSQL, MongoDB, Elasticsearch, CouchDB |
+| Analytics | Google Analytics, Matomo, Hotjar, Mixpanel, Segment |
+| Security | reCAPTCHA, Cloudflare WAF, Imperva, Sucuri |
+| + 1,300 more via Wappalyzer fingerprints |
 
 ### Misconfigurations (via nuclei)
 
