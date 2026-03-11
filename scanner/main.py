@@ -214,6 +214,8 @@ async def run(config) -> int:
                 "critical_count": sum(1 for v in prog_vulns if v["severity"] == "critical"),
                 "high_count": sum(1 for v in prog_vulns if v["severity"] == "high"),
                 "medium_count": sum(1 for v in prog_vulns if v["severity"] == "medium"),
+                "low_count": sum(1 for v in prog_vulns if v["severity"] == "low"),
+                "info_count": sum(1 for v in prog_vulns if v["severity"] == "info"),
                 "vulnerabilities": prog_vulns,
             }
         )

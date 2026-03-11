@@ -227,9 +227,9 @@ def run_nuclei(
             "-l",
             str(tmpfile),
             "-tags",
-            "panel,exposure,misconfig,default-login",
+            "panel,exposure,misconfig,default-login,tech,cloud,network",
             "-severity",
-            "critical,high,medium",
+            "critical,high,medium,low,info",
             "-j",  # JSON output (short flag)
             "-silent",
             "-no-color",
