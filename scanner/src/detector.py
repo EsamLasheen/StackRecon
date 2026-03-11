@@ -226,10 +226,7 @@ def run_nuclei(
             "nuclei",
             "-l",
             str(tmpfile),
-            "-tags",
-            "panel,exposure,misconfig,default-login,tech,cloud,network",
-            "-severity",
-            "critical,high,medium,low,info",
+            "-as",  # automatic scan: match templates to detected technologies
             "-j",  # JSON output (short flag)
             "-silent",
             "-no-color",
