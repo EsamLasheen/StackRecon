@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 from scanner.src.classifier import classify_platform, classify_reward_type
 from scanner.src.config import parse_cli_args
-from scanner.src.detector import run_httpx_binary, run_nuclei
+from scanner.src.detector import run_httpx_binary, run_nuclei, run_nuclei_info
 from scanner.src.fetcher import SourceUnavailableError, fetch_chaos_index
 from scanner.src.writer import write_atomic
 
@@ -139,18 +139,30 @@ async def run(config) -> int:
     total_detections = len(raw_detections)
     print(f"httpx finished — {total_detections} hosts with tech detections.")
 
-    # Run nuclei only on hosts that responded (much smaller set)
+    # Run nuclei on hosts that responded (much smaller set)
     detected_hosts = list(detection_map.keys())
-    print(f"Running nuclei misconfig/exposure scan on {len(detected_hosts)} live hosts…")
+
+    # 1) Vuln scan — real reportable bugs (private only)
+    print(f"Running nuclei vuln scan on {len(detected_hosts)} live hosts…")
     nuclei_findings = run_nuclei(
         hostnames=detected_hosts,
         concurrency=config.workers,
         rate_limit=200,
         timeout=10,
     )
-    print(f"Nuclei finished — {len(nuclei_findings)} findings.")
+    print(f"Nuclei vulns — {len(nuclei_findings)} findings.")
 
-    # Build nuclei lookup: hostname -> list of findings
+    # 2) Info scan — WAF/tech/cloud detection (public site)
+    print(f"Running nuclei info scan on {len(detected_hosts)} live hosts…")
+    nuclei_info = run_nuclei_info(
+        hostnames=detected_hosts,
+        concurrency=config.workers,
+        rate_limit=200,
+        timeout=10,
+    )
+    print(f"Nuclei info — {len(nuclei_info)} detections.")
+
+    # Build nuclei lookups: hostname -> list of findings
     nuclei_map: dict[str, list[dict]] = {}
     for f in nuclei_findings:
         h = f["hostname"]
@@ -158,7 +170,15 @@ async def run(config) -> int:
             nuclei_map[h] = []
         nuclei_map[h].append(f)
 
+    nuclei_info_map: dict[str, list[dict]] = {}
+    for f in nuclei_info:
+        h = f["hostname"]
+        if h not in nuclei_info_map:
+            nuclei_info_map[h] = []
+        nuclei_info_map[h].append(f)
+
     total_vuln_findings = len(nuclei_findings)
+    total_info_findings = len(nuclei_info)
 
     # Assemble per-program output
     programs_out: list[dict] = []
@@ -185,13 +205,19 @@ async def run(config) -> int:
             for d in prog_detections
         ]
 
-        # Gather nuclei findings for this program's hosts
+        # Gather nuclei vuln findings (private — reportable bugs)
         prog_vulns: list[dict] = []
         for h in meta["hostnames"]:
             if h in nuclei_map:
                 prog_vulns.extend(nuclei_map[h])
 
-        # Compute highest severity
+        # Gather nuclei info findings (public — WAF/tech/cloud detection)
+        prog_info: list[dict] = []
+        for h in meta["hostnames"]:
+            if h in nuclei_info_map:
+                prog_info.extend(nuclei_info_map[h])
+
+        # Compute highest severity from vuln findings
         highest_severity = "none"
         if prog_vulns:
             highest_severity = max(
@@ -215,8 +241,9 @@ async def run(config) -> int:
                 "high_count": sum(1 for v in prog_vulns if v["severity"] == "high"),
                 "medium_count": sum(1 for v in prog_vulns if v["severity"] == "medium"),
                 "low_count": sum(1 for v in prog_vulns if v["severity"] == "low"),
-                "info_count": sum(1 for v in prog_vulns if v["severity"] == "info"),
+                "info_count": len(prog_info),
                 "vulnerabilities": prog_vulns,
+                "info_findings": prog_info,
             }
         )
 
@@ -230,6 +257,7 @@ async def run(config) -> int:
             "total_subdomains_probed": total_probed,
             "total_detections": total_detections,
             "total_vuln_findings": total_vuln_findings,
+            "total_info_findings": total_info_findings,
             "scanner_version": SCANNER_VERSION,
             "workers_used": config.workers,
         },
@@ -244,10 +272,11 @@ async def run(config) -> int:
     except OSError as exc:
         print(f"[WARN] Failed to write private report: {exc}", file=sys.stderr)
 
-    # Strip sensitive nuclei details for public data.json
+    # Strip vuln details for public data.json — keep info findings (safe)
     for prog in programs_out:
         prog.pop("vulnerabilities", None)
-        # Keep severity + counts (safe aggregate stats), remove exploit details
+        # Keep info_findings (WAF/tech detection — safe to show publicly)
+        # Keep severity + counts (safe aggregate stats)
 
     try:
         write_atomic(data, config.output)

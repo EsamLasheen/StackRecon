@@ -226,7 +226,12 @@ def run_nuclei(
             "nuclei",
             "-l",
             str(tmpfile),
-            "-as",  # automatic scan: match templates to detected technologies
+            "-tags",
+            "cve,vuln,takeover,exposure,misconfig,default-login,"
+            "auth-bypass,unauth,cors,redirect,lfi,rfi,rce,"
+            "sqli,xss,xxe,ssrf,idor,ssti,inject",
+            "-severity",
+            "critical,high,medium,low",
             "-j",  # JSON output (short flag)
             "-silent",
             "-no-color",
@@ -240,7 +245,7 @@ def run_nuclei(
             str(rate_limit),
             "-no-interactsh",
             "-exclude-tags",
-            "dos,intrusive,fuzz,ssrf",
+            "dos,intrusive,fuzz",
         ]
 
         # Use threading to read stdout so we can enforce a hard timeout
@@ -286,6 +291,125 @@ def run_nuclei(
                     continue  # check deadline again
                 if line is None:
                     break  # nuclei finished naturally
+
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                    host = data.get("host", data.get("matched-at", ""))
+                    if "://" in host:
+                        host = host.split("://", 1)[1].split("/")[0].split(":")[0]
+
+                    info = data.get("info", {})
+                    findings.append(
+                        {
+                            "hostname": host,
+                            "template_id": data.get("template-id", ""),
+                            "name": info.get("name", ""),
+                            "severity": info.get("severity", "info").lower(),
+                            "matched_at": data.get("matched-at", ""),
+                            "description": info.get("description", ""),
+                        }
+                    )
+                except json.JSONDecodeError:
+                    continue
+        finally:
+            proc.kill()
+            proc.wait()
+
+        return findings
+    finally:
+        tmpfile.unlink(missing_ok=True)
+
+
+def run_nuclei_info(
+    hostnames: list[str],
+    concurrency: int = 50,
+    rate_limit: int = 150,
+    timeout: int = 10,
+) -> list[dict[str, Any]]:
+    """Run nuclei with -as (automatic scan) for info-level tech/WAF detection.
+
+    These findings are safe to show publicly (no exploit details).
+
+    Args:
+        hostnames: Bare hostnames (no scheme) to scan.
+        concurrency: Parallel template executions.
+        rate_limit: Max requests per second.
+        timeout: Per-request timeout in seconds.
+
+    Returns:
+        List of finding dicts: hostname, template_id, name, severity, matched_at, description.
+    """
+    if not hostnames:
+        return []
+
+    tmpfile = Path(tempfile.mktemp(suffix=".txt"))
+    try:
+        tmpfile.write_text("\n".join(hostnames) + "\n", encoding="utf-8")
+
+        cmd = [
+            "nuclei",
+            "-l",
+            str(tmpfile),
+            "-as",  # automatic scan: tech-matched templates
+            "-j",
+            "-silent",
+            "-no-color",
+            "-c",
+            str(concurrency),
+            "-bs",
+            str(concurrency),
+            "-timeout",
+            str(timeout),
+            "-rl",
+            str(rate_limit),
+            "-no-interactsh",
+            "-exclude-tags",
+            "dos,intrusive,fuzz,ssrf",
+        ]
+
+        import queue
+        import threading
+        import time as _time
+
+        timeout_sec = 3600  # 60-min cap for info scan
+        findings: list[dict[str, Any]] = []
+
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+
+        line_queue: queue.Queue[str | None] = queue.Queue()
+
+        def _reader() -> None:
+            try:
+                for ln in proc.stdout:  # type: ignore[union-attr]
+                    line_queue.put(ln)
+            except ValueError:
+                pass
+            finally:
+                line_queue.put(None)
+
+        reader_thread = threading.Thread(target=_reader, daemon=True)
+        reader_thread.start()
+
+        deadline = _time.monotonic() + timeout_sec
+        try:
+            while True:
+                remaining = deadline - _time.monotonic()
+                if remaining <= 0:
+                    break
+                try:
+                    line = line_queue.get(timeout=min(remaining, 5.0))
+                except queue.Empty:
+                    continue
+                if line is None:
+                    break
 
                 line = line.strip()
                 if not line:
