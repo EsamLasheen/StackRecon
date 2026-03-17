@@ -1360,3 +1360,243 @@ a:hover {
     width: auto;
   }
 }
+
+/* ============================================================
+   Screenshot / Share Modal
+   ============================================================ */
+
+.screenshot-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.screenshot-modal.hidden {
+  display: none;
+}
+
+.screenshot-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+}
+
+.screenshot-modal-card {
+  position: relative;
+  z-index: 1;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 24px;
+  width: min(560px, 92vw);
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+}
+
+.screenshot-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.screenshot-modal-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+
+.screenshot-modal-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+.screenshot-modal-close:hover { color: var(--text-primary); }
+
+.screenshot-modal-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.screenshot-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+.screenshot-step.done { color: var(--accent-primary); }
+
+.step-icon {
+  width: 18px;
+  text-align: center;
+  font-size: 14px;
+}
+
+.screenshot-preview-wrap {
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 16px;
+  min-height: 40px;
+  background: var(--bg-tertiary);
+}
+
+.screenshot-modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.btn-download-screenshot {
+  flex: 1;
+  padding: 10px 16px;
+  background: var(--accent-primary);
+  color: #000;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  transition: opacity 0.15s;
+}
+.btn-download-screenshot:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-download-screenshot:not(:disabled):hover { opacity: 0.85; }
+
+.btn-open-linkedin {
+  flex: 1;
+  padding: 10px 16px;
+  background: #0a66c2;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+  font-family: var(--font-mono);
+  transition: opacity 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-open-linkedin:hover { opacity: 0.85; }
+
+.screenshot-modal-hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-align: center;
+  margin: 0;
+  font-family: var(--font-mono);
+  line-height: 1.5;
+}
+
+/* ============================================================
+   Bug Hunter Targets Section
+   ============================================================ */
+
+.hunter-targets-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.hunter-targets-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  margin-bottom: 10px;
+}
+
+.hunter-targets-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.hunter-target-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  font-family: var(--font-mono);
+}
+
+.hunter-target-chip:hover {
+  border-color: var(--accent-secondary);
+  background: rgba(0, 212, 255, 0.06);
+}
+
+.hunter-target-name {
+  font-size: 12px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.hunter-target-count {
+  font-size: 10px;
+  color: var(--accent-secondary);
+  background: rgba(0, 212, 255, 0.1);
+  border-radius: 10px;
+  padding: 1px 6px;
+  font-weight: 600;
+}
+
+/* ============================================================
+   Two-column insights layout
+   ============================================================ */
+
+.insights-charts-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-top: 4px;
+}
+
+.insights-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.insights-col-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.insight-bar-hunter {
+  background: linear-gradient(90deg, #ff8c00, #ff3860) !important;
+  box-shadow: 0 0 8px rgba(255, 60, 0, 0.4) !important;
+}
+
+@media (max-width: 700px) {
+  .insights-charts-row {
+    grid-template-columns: 1fr;
+  }
+}

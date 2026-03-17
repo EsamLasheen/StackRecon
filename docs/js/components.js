@@ -471,11 +471,30 @@ function InsightsPanel(programs) {
     }
   }
 
-  var sorted = Object.keys(techCount).map(function (t) {
-    return { tech: t, count: techCount[t] };
-  }).sort(function (a, b) { return b.count - a.count; }).slice(0, 10);
+  // Bug-hunter high-value targets — these are the stacks that actually matter
+  var BUG_HUNTER_TARGETS = [
+    "Jenkins","GitLab","Grafana","Kibana","Jira","Confluence","Vault",
+    "Keycloak","WordPress","Drupal","phpMyAdmin","Portainer","Rancher",
+    "Kubernetes Dashboard","Docker Registry","Consul","Prometheus",
+    "Elasticsearch","MongoDB","Redis","RabbitMQ","Zabbix","Nagios",
+    "TeamCity","ArgoCD","Bamboo","SonarQube","Nexus","Artifactory",
+    "Swagger UI","Spring Boot","Laravel","Django","Rails","Strapi",
+    "Metabase","Superset","Airflow","Jupyter","pgAdmin","phpPgAdmin",
+  ];
 
-  var maxCount = sorted.length > 0 ? sorted[0].count : 1;
+  var allSorted = Object.keys(techCount).map(function (t) {
+    return { tech: t, count: techCount[t] };
+  }).sort(function (a, b) { return b.count - a.count; });
+
+  var top10 = allSorted.slice(0, 10);
+
+  // Bug hunter targets that aren't already in top10
+  var top10Names = top10.map(function(x) { return x.tech; });
+  var hunterTargets = allSorted.filter(function(x) {
+    return BUG_HUNTER_TARGETS.indexOf(x.tech) !== -1 && top10Names.indexOf(x.tech) === -1;
+  }).slice(0, 15);
+
+  var maxCount = top10.length > 0 ? top10[0].count : 1;
 
   var panel = el("div", {
     id: "insights-panel",
@@ -493,6 +512,9 @@ function InsightsPanel(programs) {
     text: programs.length.toLocaleString() + " programs scanned",
   }));
   header.appendChild(titleGroup);
+
+  // Use top10 as the sorted list for bars
+  var sorted = top10;
 
   // LinkedIn share button
   var shareBtn = el("button", {
@@ -528,14 +550,69 @@ function InsightsPanel(programs) {
       )
       : "I built StackRecon \u2014 an open-source tool that scans every public bug bounty program weekly and maps their full tech stack.\n\nLive dashboard: https://EsamLasheen.github.io/StackRecon/\nGitHub: https://github.com/EsamLasheen/StackRecon\n\n#BugBounty #CyberSecurity #OSINT";
 
+    // 1. Copy post text to clipboard
     copyToClipboard(postText, null, "", "");
 
-    var linkedinUrl = "https://www.linkedin.com/sharing/share-offsite/?url=" +
-      encodeURIComponent("https://EsamLasheen.github.io/StackRecon/");
-    window.open(linkedinUrl, "_blank", "noopener,noreferrer");
+    var linkedinUrl = "https://www.linkedin.com/feed/?shareActive=true";
+
+    // 2. Show modal immediately
+    var modal = document.getElementById("screenshot-modal");
+    var stepImg = document.getElementById("step-img");
+    var previewWrap = document.getElementById("screenshot-preview-wrap");
+    var downloadBtn = document.getElementById("screenshot-download-btn");
+    var linkedinBtn = document.getElementById("screenshot-linkedin-btn");
+    var closeBtn = document.getElementById("screenshot-modal-close");
+    var backdrop = modal ? modal.querySelector(".screenshot-modal-backdrop") : null;
+
+    if (modal) {
+      previewWrap.innerHTML = "";
+      downloadBtn.disabled = true;
+      downloadBtn.textContent = "\u8681 Download image";
+      if (stepImg) { stepImg.className = "screenshot-step"; stepImg.querySelector(".step-icon").textContent = "\u21BB"; }
+      if (linkedinBtn) linkedinBtn.href = linkedinUrl;
+      modal.classList.remove("hidden");
+
+      function closeModal() { modal.classList.add("hidden"); }
+      if (closeBtn) closeBtn.onclick = closeModal;
+      if (backdrop) backdrop.onclick = closeModal;
+    }
+
+    // 3. Take screenshot of insights panel
+    var insightsPanel = document.getElementById("insights-panel");
+    if (insightsPanel && typeof html2canvas !== "undefined") {
+      html2canvas(insightsPanel, {
+        backgroundColor: "#0a0e27",
+        scale: 2,
+        useCORS: true,
+        logging: false,
+      }).then(function (canvas) {
+        canvas.style.maxWidth = "100%";
+        canvas.style.borderRadius = "8px";
+        if (previewWrap) previewWrap.appendChild(canvas);
+        if (stepImg) {
+          stepImg.className = "screenshot-step done";
+          stepImg.querySelector(".step-icon").textContent = "\u2713";
+          stepImg.querySelector("span:last-child").textContent = "Screenshot ready — download below";
+        }
+        if (downloadBtn) {
+          downloadBtn.disabled = false;
+          downloadBtn.onclick = function () {
+            var link = document.createElement("a");
+            var date = new Date().toISOString().slice(0, 10);
+            link.download = "stackrecon-" + date + ".png";
+            link.href = canvas.toDataURL("image/png");
+            link.click();
+          };
+        }
+      }).catch(function () {
+        if (stepImg) stepImg.querySelector("span:last-child").textContent = "Screenshot failed — take one manually";
+      });
+    } else if (stepImg) {
+      stepImg.querySelector("span:last-child").textContent = "Take a screenshot of this page manually";
+    }
 
     shareBtn.classList.add("shared");
-    shareBtn.innerHTML = "\u2713 Post text copied \u2014 paste it in LinkedIn!";
+    shareBtn.innerHTML = "\u2713 Ready — check the modal!";
     setTimeout(function () {
       shareBtn.classList.remove("shared");
       shareBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;margin-right:5px"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>Share on LinkedIn';
@@ -576,54 +653,64 @@ function InsightsPanel(programs) {
     panel.appendChild(statsRow);
   }
 
-  // ---- Bars ----
-  var barsEl = el("div", { "class": "insights-bars" });
+  // ---- Two-column bar charts ----
+  var chartsRow = el("div", { "class": "insights-charts-row" });
 
-  for (var k = 0; k < sorted.length; k++) {
-    (function (item, rank) {
-      var pct = Math.max(4, Math.round((item.count / maxCount) * 100));
-      var row = el("div", {
-        "class": "insight-row",
-        role: "button",
-        tabindex: "0",
-        title: "Filter by " + item.tech,
-        "aria-label": item.tech + ": " + item.count + " programs",
-      });
-
-      var labelEl = el("div", { "class": "insight-label" });
-      labelEl.appendChild(el("span", { "class": "insight-rank", text: "#" + (rank + 1) }));
-      labelEl.appendChild(el("span", { "class": "insight-tech", text: item.tech }));
-      row.appendChild(labelEl);
-
-      var barWrap = el("div", { "class": "insight-bar-wrap", "aria-hidden": "true" });
-      var bar = el("div", { "class": "insight-bar" });
-      bar.style.width = "0%";
-      barWrap.appendChild(bar);
-      row.appendChild(barWrap);
-
-      row.appendChild(el("span", {
-        "class": "insight-count",
-        text: item.count + " program" + (item.count !== 1 ? "s" : ""),
-      }));
-
-      // Animate bar in after mount
-      setTimeout(function () { bar.style.width = pct + "%"; }, 80 + rank * 50);
-
-      function activate() {
-        if (window.stackrecon && window.stackrecon._onInsightClick) {
-          window.stackrecon._onInsightClick(item.tech);
+  function buildBarsCol(title, items, colMaxCount, barClass, animOffset) {
+    var col = el("div", { "class": "insights-col" });
+    col.appendChild(el("div", { "class": "insights-col-title", text: title }));
+    var barsEl = el("div", { "class": "insights-bars" });
+    for (var k = 0; k < items.length; k++) {
+      (function (item, rank) {
+        var pct = Math.max(4, Math.round((item.count / colMaxCount) * 100));
+        var row = el("div", {
+          "class": "insight-row",
+          role: "button",
+          tabindex: "0",
+          title: "Filter by " + item.tech,
+          "aria-label": item.tech + ": " + item.count + " programs",
+        });
+        var labelEl = el("div", { "class": "insight-label" });
+        labelEl.appendChild(el("span", { "class": "insight-rank", text: "#" + (rank + 1) }));
+        labelEl.appendChild(el("span", { "class": "insight-tech", text: item.tech }));
+        row.appendChild(labelEl);
+        var barWrap = el("div", { "class": "insight-bar-wrap", "aria-hidden": "true" });
+        var bar = el("div", { "class": "insight-bar " + (barClass || "") });
+        bar.style.width = "0%";
+        barWrap.appendChild(bar);
+        row.appendChild(barWrap);
+        row.appendChild(el("span", {
+          "class": "insight-count",
+          text: item.count + " program" + (item.count !== 1 ? "s" : ""),
+        }));
+        setTimeout(function () { bar.style.width = pct + "%"; }, (animOffset || 80) + rank * 50);
+        function activate() {
+          if (window.stackrecon && window.stackrecon._onInsightClick) {
+            window.stackrecon._onInsightClick(item.tech);
+          }
         }
-      }
-      row.addEventListener("click", activate);
-      row.addEventListener("keydown", function (e) {
-        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(); }
-      });
-
-      barsEl.appendChild(row);
-    })(sorted[k], k);
+        row.addEventListener("click", activate);
+        row.addEventListener("keydown", function (e) {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(); }
+        });
+        barsEl.appendChild(row);
+      })(items[k], k);
+    }
+    col.appendChild(barsEl);
+    return col;
   }
 
-  panel.appendChild(barsEl);
+  // Left: top 10 all techs
+  chartsRow.appendChild(buildBarsCol("TOP EXPOSED TECHNOLOGIES", sorted, maxCount, "", 80));
+
+  // Right: top 10 hacker targets (include ones already in top10 too, full independent list)
+  var hunterList = allSorted.filter(function(x) {
+    return BUG_HUNTER_TARGETS.indexOf(x.tech) !== -1;
+  }).slice(0, 10);
+  var hunterMax = hunterList.length > 0 ? hunterList[0].count : 1;
+  chartsRow.appendChild(buildBarsCol("TOP HACKER TARGETS", hunterList, hunterMax, "insight-bar-hunter", 80));
+
+  panel.appendChild(chartsRow);
 
   // Expose update method for auto-refresh
   panel.updateInsights = function (newPrograms) {

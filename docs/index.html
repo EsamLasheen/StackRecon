@@ -13,6 +13,7 @@
   <meta name="twitter:description" content="Discover what technologies are running behind every public bug bounty program." />
   <title>StackRecon — Bug Bounty Technology Intelligence</title>
   <link rel="stylesheet" href="css/style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
 </head>
 <body>
   <a href="#results-container" class="skip-link">Skip to results</a>
@@ -119,6 +120,33 @@
         <span id="scan-elapsed" class="scan-elapsed"></span>
       </div>
       <div id="scan-stats-row" class="scan-stats-row"></div>
+    </div>
+  </div>
+
+  <!-- Screenshot preview modal -->
+  <div id="screenshot-modal" class="screenshot-modal hidden" role="dialog" aria-modal="true" aria-label="Share preview">
+    <div class="screenshot-modal-backdrop"></div>
+    <div class="screenshot-modal-card">
+      <div class="screenshot-modal-header">
+        <span class="screenshot-modal-title">Your LinkedIn post is ready</span>
+        <button id="screenshot-modal-close" class="screenshot-modal-close" type="button" aria-label="Close">&times;</button>
+      </div>
+      <div class="screenshot-modal-steps">
+        <div class="screenshot-step done" id="step-text">
+          <span class="step-icon">&#10003;</span>
+          <span>Post text copied to clipboard</span>
+        </div>
+        <div class="screenshot-step" id="step-img">
+          <span class="step-icon">&#8635;</span>
+          <span>Generating screenshot…</span>
+        </div>
+      </div>
+      <div id="screenshot-preview-wrap" class="screenshot-preview-wrap"></div>
+      <div class="screenshot-modal-actions">
+        <button id="screenshot-download-btn" class="btn-download-screenshot" type="button" disabled>&#8681; Download image</button>
+        <a id="screenshot-linkedin-btn" class="btn-open-linkedin" href="#" target="_blank" rel="noopener noreferrer">Open LinkedIn &rarr;</a>
+      </div>
+      <p class="screenshot-modal-hint">On LinkedIn: create a post, paste the text (Ctrl+V), then attach the downloaded image.</p>
     </div>
   </div>
 
