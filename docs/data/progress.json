@@ -1,13 +1,13 @@
 {
   "status": "scanning",
-  "phase": "httpx",
-  "phase_label": "Tech detection — probing 102,600 subdomains",
-  "phase_number": 2,
+  "phase": "nuclei_info",
+  "phase_label": "Info scan — WAF & tech fingerprinting",
+  "phase_number": 4,
   "total_phases": 4,
   "started_at": "2026-03-17T08:33:42.499707Z",
   "programs_loaded": 798,
   "hostnames_total": 102600,
-  "detections_so_far": 0,
+  "detections_so_far": 6047,
   "vuln_findings": 0,
-  "updated_at": "2026-03-17T08:33:42.672264Z"
+  "updated_at": "2026-03-17T09:20:00.808226Z"
 }
