@@ -79,38 +79,40 @@ jobs:
 
       - name: Run scanner
         run: |
-          # Background process: push progress.json every 5 minutes during scan
+          # Background process: push progress.json every 5 minutes during scan.
+          # Pull BEFORE add/commit so we never push to a diverged branch.
           (while true; do
             sleep 300
             if [ -f docs/data/progress.json ]; then
+              git pull --rebase origin main || true
               git add docs/data/progress.json
               git diff --cached --quiet || {
                 git commit -m "scan: progress update [skip ci]"
-                git pull --rebase origin main || true
                 git push || true
               }
             fi
           done) &
           PUSHER_PID=$!
 
-          if [ -n "${{ github.event.inputs.limit }}" ]; then
-            python3 -m scanner.main \
-              --limit ${{ github.event.inputs.limit }} \
-              --workers 300 \
-              --connect-timeout 1 \
-              --read-timeout 3 \
-              --output docs/data/data.json \
-              --templates /tmp/nuclei-templates \
-              --progress docs/data/progress.json
-          else
-            python3 -m scanner.main \
-              --workers 300 \
-              --connect-timeout 1 \
-              --read-timeout 3 \
-              --output docs/data/data.json \
-              --templates /tmp/nuclei-templates \
-              --progress docs/data/progress.json
+          LIMIT="${{ github.event.inputs.limit }}"
+          LIMIT_ARGS=""
+          if [ -n "$LIMIT" ]; then
+            # Validate: must be a plain integer to prevent shell injection
+            if echo "$LIMIT" | grep -qE '^[0-9]+$'; then
+              LIMIT_ARGS="--limit $LIMIT"
+            else
+              echo "[WARN] Ignoring non-numeric limit value: $LIMIT"
+            fi
           fi
+
+          python3 -m scanner.main \
+            $LIMIT_ARGS \
+            --workers 300 \
+            --connect-timeout 1 \
+            --read-timeout 3 \
+            --output docs/data/data.json \
+            --templates /tmp/nuclei-templates \
+            --progress docs/data/progress.json
 
           kill $PUSHER_PID 2>/dev/null || true
 
@@ -120,16 +122,16 @@ jobs:
           name: stackrecon-full-report-${{ github.run_id }}
           path: docs/data/data-full.json
           retention-days: 90
+          if-no-files-found: warn
 
       - name: Commit results
         run: |
           git add -f docs/data/data.json docs/data/progress.json
           git diff --cached --quiet && echo "No changes to commit" || \
             git commit -m "data: weekly scan results [$(date -u '+%Y-%m-%d')]"
-          git pull --rebase origin main || {
-            echo "Rebase conflict — keeping our scan results"
-            git checkout --theirs docs/data/data.json docs/data/progress.json
-            git add docs/data/data.json docs/data/progress.json
-            git rebase --continue
-          }
+          # Rebase onto any progress commits the background pusher made.
+          # -X theirs: on conflict prefer our scan data (the replayed commit).
+          # GIT_EDITOR=true: prevents git from opening an interactive editor
+          # in CI if it ever needs one (would hang the runner otherwise).
+          GIT_EDITOR=true git pull --rebase -X theirs origin main
           git push
