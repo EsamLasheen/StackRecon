@@ -1,13 +1,14 @@
 {
-  "status": "scanning",
-  "phase": "nuclei_info",
-  "phase_label": "Info scan — WAF & tech fingerprinting",
+  "status": "idle",
+  "phase": "done",
+  "phase_label": "Scan complete",
   "phase_number": 4,
   "total_phases": 4,
   "started_at": "2026-03-17T08:33:42.499707Z",
+  "last_scan": "2026-03-17T10:20:00.979456Z",
   "programs_loaded": 798,
   "hostnames_total": 102600,
   "detections_so_far": 6047,
   "vuln_findings": 0,
-  "updated_at": "2026-03-17T09:20:00.808226Z"
+  "updated_at": "2026-03-17T10:20:01.138256Z"
 }
