@@ -503,18 +503,30 @@ function InsightsPanel(programs) {
 
   shareBtn.addEventListener("click", function () {
     var topTech = sorted.length > 0 ? sorted[0] : null;
+    var totalCrit = 0, totalHigh = 0;
+    for (var pi = 0; pi < programs.length; pi++) {
+      totalCrit += programs[pi].critical_count || 0;
+      totalHigh += programs[pi].high_count || 0;
+    }
     var postText = topTech
       ? (
-        "\uD83C\uDFAF " + topTech.count + " out of " + programs.length + " bug bounty programs have " + topTech.tech + " exposed publicly.\n\n" +
-        "I built StackRecon \u2014 a free open-source tool that fingerprints the entire public bug bounty ecosystem.\n\n" +
-        "It scans every program from Chaos ProjectDiscovery and maps their tech stack:\n" +
-        "\u2022 Grafana, Jenkins, GitLab, Keycloak\n" +
-        "\u2022 WordPress, Jira, Confluence, and 40+ more\n\n" +
-        "Filter by technology, platform, or reward type \u2014 then copy all subdomains in one click.\n\n" +
-        "\uD83D\uDD17 https://EsamLasheen.github.io/StackRecon/\n\u2B50 https://github.com/EsamLasheen/StackRecon\n\n" +
-        "#BugBounty #CyberSecurity #InfoSec #PenTest #HackerOne #Bugcrowd #OSINT"
+        "I built a tool that automatically scans every public bug bounty program and maps their full tech stack.\n\n" +
+        "Results from this week\u2019s scan across " + programs.length + " programs:\n\n" +
+        "\uD83D\uDD34 " + totalCrit + " critical vulnerabilities found\n" +
+        "\uD83D\uDFE0 " + totalHigh + " high severity findings\n" +
+        "\uD83D\uDCE1 " + topTech.count + " programs running " + topTech.tech + " publicly\n" +
+        "\uD83C\uDF10 6,000+ live subdomains fingerprinted\n\n" +
+        "The tool is called StackRecon \u2014 fully open source, runs weekly on GitHub Actions.\n\n" +
+        "It uses httpx + nuclei to detect 1,400+ technologies and real misconfigurations across:\n" +
+        "\u2022 Admin panels, dev environments, CI/CD tools\n" +
+        "\u2022 Grafana, Jenkins, GitLab, Vault, Kubernetes dashboards\n" +
+        "\u2022 Every HackerOne, Bugcrowd, Intigriti and YesWeHack program\n\n" +
+        "Filter by tech, severity, or platform \u2014 copy all matching subdomains in one click.\n\n" +
+        "\uD83D\uDD17 Live dashboard: https://EsamLasheen.github.io/StackRecon/\n" +
+        "\u2B50 GitHub: https://github.com/EsamLasheen/StackRecon\n\n" +
+        "#BugBounty #CyberSecurity #InfoSec #PenTesting #HackerOne #Bugcrowd #OSINT #ReconTool"
       )
-      : "Check out StackRecon \u2014 bug bounty technology intelligence:\nhttps://EsamLasheen.github.io/StackRecon/";
+      : "I built StackRecon \u2014 an open-source tool that scans every public bug bounty program weekly and maps their full tech stack.\n\nLive dashboard: https://EsamLasheen.github.io/StackRecon/\nGitHub: https://github.com/EsamLasheen/StackRecon\n\n#BugBounty #CyberSecurity #OSINT";
 
     copyToClipboard(postText, null, "", "");
 

@@ -1,142 +1,106 @@
 # StackRecon
 
-> Bug bounty technology intelligence — powered by httpx + nuclei.
+> Automated weekly reconnaissance across every public bug bounty program.
 
-**[🌐 Live Site](https://esamlasheen.github.io/StackRecon/)** · **[798 Programs](https://esamlasheen.github.io/StackRecon/)** · **[6,000+ Live Hosts](https://esamlasheen.github.io/StackRecon/)** · **[Daily Updates](https://esamlasheen.github.io/StackRecon/)**
+**[🌐 Live Dashboard](https://esamlasheen.github.io/StackRecon/)** · **[798 Programs](https://esamlasheen.github.io/StackRecon/)** · **[6,000+ Live Hosts](https://esamlasheen.github.io/StackRecon/)** · **[Weekly Auto-Scan](https://esamlasheen.github.io/StackRecon/)**
 
 ---
 
-## What is StackRecon?
+StackRecon scans every public bug bounty program every week and fingerprints their entire tech stack — detecting technologies, exposed services, and real misconfigurations using **httpx** + **nuclei**.
 
-StackRecon automatically scans every public bug bounty program and maps their entire tech stack — detecting 1,400+ technologies and real misconfigurations using industry-standard tools.
+Built for security researchers who want to find the right targets fast.
 
-**Built for bug hunters who want to find the right targets fast.**
+---
+
+## What it does
+
+Every Monday, a GitHub Actions workflow:
+
+1. Pulls ~800 programs from [Chaos ProjectDiscovery](https://chaos.projectdiscovery.io/)
+2. Generates ~102,000 subdomain candidates using 25 security-focused prefixes
+3. Runs `httpx` with Wappalyzer fingerprints → detects 1,400+ technologies
+4. Runs `nuclei` with custom templates → finds real misconfigs and CVEs
+5. Scores programs by severity (Critical / High / Medium)
+6. Publishes results to the live dashboard automatically
 
 ---
 
 ## Features
 
-- **1,400+ Technology Detection** — powered by [httpx](https://github.com/projectdiscovery/httpx) with Wappalyzer fingerprints
-- **Misconfiguration Detection** — [nuclei](https://github.com/projectdiscovery/nuclei) scans for exposed panels, default credentials, and misconfigs
-- **Severity Scoring** — programs ranked Critical / High / Medium based on real findings
-- **24 Targeted Subdomain Prefixes** — probes `api.`, `admin.`, `grafana.`, `jenkins.`, `k8s.`, `vault.`, and more per domain
-- **Daily Auto-Updates** — GitHub Actions runs the full scan every day automatically
-- **5 Combinable Filters** — filter by technology, platform, reward type, severity, or name
-- **Copy All Subdomains** — select a technology, copy every matching subdomain in one click
-- **Shareable Links** — filter state saved in URL hash
-- **Auto-Refresh** — frontend silently updates every 15 minutes without page reload
-- **Pure Static Site** — no backend, no database, loads instantly
+- **1,400+ technology fingerprints** via httpx + Wappalyzer
+- **Custom nuclei templates** from the community for real vulnerability detection
+- **Severity scoring** — programs ranked by actual findings
+- **25 subdomain prefixes** targeting `admin.`, `api.`, `grafana.`, `jenkins.`, `k8s.`, `vault.`, `gitlab.`, and more
+- **Live scan progress bar** — see the scan running in real time on the dashboard
+- **5 combinable filters** — tech stack, platform, reward type, severity, name
+- **One-click subdomain copy** — filter by technology, copy all matching hosts
+- **Shareable filter links** — state saved in URL hash
+- **Pure static site** — no backend, no database, instant load
 
 ---
 
-## Live Site
+## Live Dashboard
 
 👉 **[https://esamlasheen.github.io/StackRecon/](https://esamlasheen.github.io/StackRecon/)**
 
 ---
 
-## How It Works
-
-```
-GitHub Actions (daily at 02:00 UTC)
-  ↓
-Fetch 798 programs from Chaos ProjectDiscovery
-  ↓
-Generate ~102,000 subdomain candidates (24 security-focused prefixes × domains)
-  ↓
-httpx -tech-detect → 1,400+ Wappalyzer fingerprints
-  ↓
-nuclei (panel + exposure + misconfig + default-login templates)
-  ↓
-Severity scoring: Critical / High / Medium per program
-  ↓
-Commit data.json → GitHub Pages auto-deploys
-```
-
----
-
-## Scanner Setup (local)
-
-Requires **httpx** and **nuclei** binaries on PATH:
+## Run locally
 
 ```bash
-# Install Go tools
+# Dependencies
 go install github.com/projectdiscovery/httpx/cmd/httpx@latest
 go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
-nuclei -update-templates
 
-# Clone and install Python deps
 git clone https://github.com/EsamLasheen/StackRecon.git
 cd StackRecon
 pip install -r scanner/requirements.txt
 
-# Quick test (10 programs)
-python3 -m scanner.main --limit 10
+# Quick test (5 programs)
+python3 -m scanner.main --limit 5
 
-# Full scan
-python3 -m scanner.main --workers 100 --output docs/data/data.json
+# Full scan with custom templates
+python3 -m scanner.main \
+  --workers 100 \
+  --templates /path/to/nuclei-templates \
+  --progress docs/data/progress.json \
+  --output docs/data/data.json
 ```
 
-### CLI Options
+### CLI flags
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--limit N` | all | Process at most N programs |
 | `--workers N` | 50 | Concurrent threads |
+| `--limit N` | all | Scan at most N programs |
+| `--templates PATH` | built-in | Custom nuclei templates directory |
+| `--progress PATH` | none | Write live progress JSON |
+| `--output PATH` | `docs/data/data.json` | Output file |
 | `--connect-timeout S` | 3 | TCP connect timeout |
 | `--read-timeout S` | 7 | HTTP read timeout |
-| `--output PATH` | `docs/data/data.json` | Output file |
 
 ---
 
-## Detection Coverage
-
-### Technologies (via httpx + Wappalyzer)
+## Detection coverage
 
 | Category | Examples |
 |----------|---------|
-| Monitoring | Grafana, Prometheus, Kibana, Datadog, Zabbix, Nagios |
-| CI/CD | Jenkins, GitLab CI, ArgoCD, TeamCity, GoCD, Bamboo |
-| Identity/Auth | Keycloak, HashiCorp Vault, Okta, Auth0, ForgeRock |
-| CMS | WordPress, Drupal, Magento, Shopify, Joomla, Ghost |
-| Frameworks | Spring Boot, Django, Laravel, Rails, Express, Next.js, Nuxt |
-| Web Servers | Nginx, Apache, Traefik, HAProxy, Caddy, LiteSpeed |
-| CDN/Cloud | Cloudflare, Fastly, AWS ALB, Akamai, Azure CDN |
-| Containers | Portainer, Rancher, Kubernetes Dashboard, Docker Registry |
-| Infrastructure | Consul, Nomad, etcd, RabbitMQ, Kafka, Redis |
-| Databases | MySQL, PostgreSQL, MongoDB, Elasticsearch, CouchDB |
-| Analytics | Google Analytics, Matomo, Hotjar, Mixpanel, Segment |
-| Security | reCAPTCHA, Cloudflare WAF, Imperva, Sucuri |
-| + 1,300 more via Wappalyzer fingerprints |
-
-### Misconfigurations (via nuclei)
-
-- Exposed admin panels (Jenkins no-auth, Grafana anonymous access)
-- Default credentials on management interfaces
-- Exposed `.git` repositories and `.env` files
-- Spring Boot Actuator endpoints open
-- Elasticsearch / Kibana unauthenticated
-- phpMyAdmin publicly accessible
-- 8,000+ nuclei community templates
+| Monitoring | Grafana, Prometheus, Kibana, Datadog, Zabbix |
+| CI/CD | Jenkins, GitLab, ArgoCD, TeamCity, Bamboo |
+| Identity | Keycloak, HashiCorp Vault, Okta, Auth0 |
+| CMS | WordPress, Drupal, Magento, Joomla |
+| Frameworks | Spring Boot, Django, Laravel, Rails, Next.js |
+| Web Servers | Nginx, Apache, Traefik, HAProxy, Caddy |
+| Cloud/CDN | Cloudflare, AWS ALB, Akamai, Fastly |
+| Containers | Portainer, Rancher, Kubernetes Dashboard |
+| Databases | MySQL, PostgreSQL, MongoDB, Elasticsearch |
+| + 1,300 more via Wappalyzer |
 
 ---
 
-## Development
+## Data source
 
-```bash
-# Run tests (87%+ coverage)
-python3 -m pytest tests/unit/ tests/integration/ -q
-
-# Lint + format
-ruff check scanner/src/ scanner/main.py
-black --check scanner/src/ scanner/main.py
-```
-
----
-
-## Data Source
-
-Program list sourced from [Chaos ProjectDiscovery](https://chaos.projectdiscovery.io/) — the largest public bug bounty recon dataset.
+Program list from [Chaos ProjectDiscovery](https://chaos.projectdiscovery.io/) — the largest public bug bounty recon dataset.
 
 ---
 
