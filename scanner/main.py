@@ -17,6 +17,12 @@ SCANNER_VERSION = "4.0.0"
 
 SEVERITY_ORDER = {"critical": 4, "high": 3, "medium": 2, "low": 1, "info": 0, "none": -1}
 
+# Protocol/transport indicators — not real tech stack, filter from results
+_NOISE_TECHS = {
+    "HSTS", "HTTP/3", "HTTP/2", "HTTPS", "HTTP",
+    "SSL", "TLS", "IPv6", "DNSSEC",
+}
+
 
 def _now() -> str:
     return datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
@@ -278,16 +284,17 @@ async def run(config) -> int:
 
         tech_set: set[str] = set()
         for det in prog_detections:
-            tech_set.update(det.get("technologies", []))
+            tech_set.update(t for t in det.get("technologies", []) if t not in _NOISE_TECHS)
 
         detections_out = [
             {
                 "hostname": d["hostname"],
-                "technologies": d["technologies"],
+                "technologies": [t for t in d["technologies"] if t not in _NOISE_TECHS],
                 "http_status": d.get("http_status"),
                 "probe_error": d.get("probe_error"),
             }
             for d in prog_detections
+            if any(t not in _NOISE_TECHS for t in d.get("technologies", []))
         ]
 
         # Gather nuclei vuln findings (private — reportable bugs)
