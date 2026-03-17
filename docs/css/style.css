@@ -1496,6 +1496,31 @@ a:hover {
 }
 .btn-open-linkedin:hover { opacity: 0.85; }
 
+.screenshot-modal-actions--secondary {
+  margin-top: -4px;
+}
+
+.btn-copy-img {
+  flex: 1;
+  padding: 10px 16px;
+  background: var(--bg-tertiary);
+  color: var(--accent-primary);
+  border: 1px solid var(--accent-primary);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  transition: background 0.15s, color 0.15s, opacity 0.15s;
+}
+.btn-copy-img:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-copy-img:not(:disabled):hover { background: rgba(0,255,136,0.12); }
+.btn-copy-img.copied {
+  background: var(--accent-primary);
+  color: #000;
+  border-color: var(--accent-primary);
+}
+
 .screenshot-modal-hint {
   font-size: 11px;
   color: var(--text-secondary);

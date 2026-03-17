@@ -13,7 +13,6 @@
   <meta name="twitter:description" content="Discover what technologies are running behind every public bug bounty program." />
   <title>StackRecon — Bug Bounty Technology Intelligence</title>
   <link rel="stylesheet" href="css/style.css" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
 </head>
 <body>
   <a href="#results-container" class="skip-link">Skip to results</a>
@@ -143,10 +142,13 @@
       </div>
       <div id="screenshot-preview-wrap" class="screenshot-preview-wrap"></div>
       <div class="screenshot-modal-actions">
+        <button id="screenshot-copy-img-btn" class="btn-copy-img" type="button" disabled>&#128203; Copy image to clipboard</button>
         <button id="screenshot-download-btn" class="btn-download-screenshot" type="button" disabled>&#8681; Download image</button>
-        <a id="screenshot-linkedin-btn" class="btn-open-linkedin" href="#" target="_blank" rel="noopener noreferrer">Open LinkedIn &rarr;</a>
       </div>
-      <p class="screenshot-modal-hint">On LinkedIn: create a post, paste the text (Ctrl+V), then attach the downloaded image.</p>
+      <div class="screenshot-modal-actions screenshot-modal-actions--secondary">
+        <a id="screenshot-linkedin-btn" class="btn-open-linkedin" href="https://www.linkedin.com/feed/" target="_blank" rel="noopener noreferrer">Open LinkedIn &rarr;</a>
+      </div>
+      <p class="screenshot-modal-hint">1. Copy image &nbsp;2. Open LinkedIn &nbsp;3. Create post → paste text (Ctrl+V) → attach image</p>
     </div>
   </div>
 

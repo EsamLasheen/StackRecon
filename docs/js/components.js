@@ -471,15 +471,38 @@ function InsightsPanel(programs) {
     }
   }
 
-  // Bug-hunter high-value targets — these are the stacks that actually matter
+  // Attack surface — everything a bug hunter actually wants to find
   var BUG_HUNTER_TARGETS = [
-    "Jenkins","GitLab","Grafana","Kibana","Jira","Confluence","Vault",
-    "Keycloak","WordPress","Drupal","phpMyAdmin","Portainer","Rancher",
-    "Kubernetes Dashboard","Docker Registry","Consul","Prometheus",
-    "Elasticsearch","MongoDB","Redis","RabbitMQ","Zabbix","Nagios",
-    "TeamCity","ArgoCD","Bamboo","SonarQube","Nexus","Artifactory",
-    "Swagger UI","Spring Boot","Laravel","Django","Rails","Strapi",
-    "Metabase","Superset","Airflow","Jupyter","pgAdmin","phpPgAdmin",
+    // DevOps & CI/CD
+    "Jenkins","GitLab","GitHub","Bitbucket","TeamCity","Bamboo","ArgoCD",
+    "GoCD","Drone","CircleCI","Travis CI","Concourse",
+    // Monitoring & observability
+    "Grafana","Kibana","Prometheus","Zabbix","Nagios","Datadog","Checkmk",
+    "Netdata","Graylog","Jaeger","Zipkin","Uptime Kuma",
+    // Dev tools & code
+    "SonarQube","Nexus","Artifactory","JFrog","Gerrit","Phabricator",
+    // Identity & secrets
+    "Keycloak","HashiCorp Vault","Vault","Okta","Authentik","Authelia",
+    // Project management (often unpatched)
+    "Jira","Confluence","Redmine","Linear","Plane",
+    // Databases exposed
+    "phpMyAdmin","Adminer","pgAdmin","phpPgAdmin","MongoDB","Elasticsearch",
+    "Redis","RabbitMQ","Kafka","CouchDB","InfluxDB","Cassandra",
+    // CMS & apps
+    "WordPress","Drupal","Magento","Joomla","Ghost","Strapi","Directus",
+    // APIs & docs
+    "Swagger UI","Swagger","OpenAPI","Redoc","GraphQL",
+    // Container & infra
+    "Portainer","Rancher","Kubernetes Dashboard","Docker Registry",
+    "Consul","Nomad","etcd",
+    // Analytics & BI
+    "Metabase","Superset","Redash","Grafana","Jupyter","Airflow",
+    // Frameworks (fingerprint for CVEs)
+    "Spring Boot","Laravel","Django","Rails","Symfony","Flask","Express",
+    // Other juicy targets
+    "Minio","MinIO","Vault","Rundeck","AWX","Ansible Tower",
+    "Gitea","Forgejo","Gogs","Seafile","Nextcloud","Owncloud",
+    "Rocketchat","Rocket.Chat","Mattermost","Zulip",
   ];
 
   var allSorted = Object.keys(techCount).map(function (t) {
@@ -555,60 +578,192 @@ function InsightsPanel(programs) {
 
     var linkedinUrl = "https://www.linkedin.com/feed/?shareActive=true";
 
-    // 2. Show modal immediately
-    var modal = document.getElementById("screenshot-modal");
-    var stepImg = document.getElementById("step-img");
-    var previewWrap = document.getElementById("screenshot-preview-wrap");
-    var downloadBtn = document.getElementById("screenshot-download-btn");
-    var linkedinBtn = document.getElementById("screenshot-linkedin-btn");
-    var closeBtn = document.getElementById("screenshot-modal-close");
-    var backdrop = modal ? modal.querySelector(".screenshot-modal-backdrop") : null;
+    // 2. Show modal
+    var modal      = document.getElementById("screenshot-modal");
+    var stepImg    = document.getElementById("step-img");
+    var previewWrap= document.getElementById("screenshot-preview-wrap");
+    var downloadBtn= document.getElementById("screenshot-download-btn");
+    var copyImgBtn = document.getElementById("screenshot-copy-img-btn");
+    var linkedinBtn= document.getElementById("screenshot-linkedin-btn");
+    var closeBtn   = document.getElementById("screenshot-modal-close");
+    var backdrop   = modal ? modal.querySelector(".screenshot-modal-backdrop") : null;
 
     if (modal) {
       previewWrap.innerHTML = "";
-      downloadBtn.disabled = true;
-      downloadBtn.textContent = "\u8681 Download image";
-      if (stepImg) { stepImg.className = "screenshot-step"; stepImg.querySelector(".step-icon").textContent = "\u21BB"; }
+      if (downloadBtn) { downloadBtn.disabled = true; }
+      if (copyImgBtn)  { copyImgBtn.disabled = true; }
+      if (stepImg) { stepImg.className = "screenshot-step"; stepImg.querySelector(".step-icon").textContent = "\u21BB"; stepImg.querySelector("span:last-child").textContent = "Generating card…"; }
       if (linkedinBtn) linkedinBtn.href = linkedinUrl;
       modal.classList.remove("hidden");
-
       function closeModal() { modal.classList.add("hidden"); }
       if (closeBtn) closeBtn.onclick = closeModal;
       if (backdrop) backdrop.onclick = closeModal;
     }
 
-    // 3. Take screenshot of insights panel
-    var insightsPanel = document.getElementById("insights-panel");
-    if (insightsPanel && typeof html2canvas !== "undefined") {
-      html2canvas(insightsPanel, {
-        backgroundColor: "#0a0e27",
-        scale: 2,
-        useCORS: true,
-        logging: false,
-      }).then(function (canvas) {
-        canvas.style.maxWidth = "100%";
-        canvas.style.borderRadius = "8px";
-        if (previewWrap) previewWrap.appendChild(canvas);
-        if (stepImg) {
-          stepImg.className = "screenshot-step done";
-          stepImg.querySelector(".step-icon").textContent = "\u2713";
-          stepImg.querySelector("span:last-child").textContent = "Screenshot ready — download below";
-        }
-        if (downloadBtn) {
-          downloadBtn.disabled = false;
-          downloadBtn.onclick = function () {
-            var link = document.createElement("a");
-            var date = new Date().toISOString().slice(0, 10);
-            link.download = "stackrecon-" + date + ".png";
-            link.href = canvas.toDataURL("image/png");
-            link.click();
-          };
-        }
-      }).catch(function () {
-        if (stepImg) stepImg.querySelector("span:last-child").textContent = "Screenshot failed — take one manually";
-      });
-    } else if (stepImg) {
-      stepImg.querySelector("span:last-child").textContent = "Take a screenshot of this page manually";
+    // 3. Draw clean Canvas card (no DOM capture — crisp output)
+    var canvas = document.createElement("canvas");
+    var W = 1200, H = 630;
+    canvas.width = W; canvas.height = H;
+    var ctx = canvas.getContext("2d");
+
+    // Background
+    ctx.fillStyle = "#0a0e27";
+    ctx.fillRect(0, 0, W, H);
+
+    // Top accent line
+    var grad = ctx.createLinearGradient(0, 0, W, 0);
+    grad.addColorStop(0, "#00ff88");
+    grad.addColorStop(0.5, "#00d4ff");
+    grad.addColorStop(1, "#00ff88");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, 4);
+
+    // Title
+    ctx.fillStyle = "#e4e8f5";
+    ctx.font = "bold 38px monospace";
+    ctx.fillText("Stack", 48, 68);
+    ctx.fillStyle = "#00ff88";
+    ctx.fillText("Recon", 48 + ctx.measureText("Stack").width, 68);
+
+    ctx.fillStyle = "#9ca3af";
+    ctx.font = "16px monospace";
+    ctx.fillText("Bug Bounty Intelligence  \u2014  Weekly Auto-Scan", 48, 96);
+
+    // Stats row
+    var stats = [
+      { label: "PROGRAMS", value: programs.length.toLocaleString() },
+      { label: "LIVE HOSTS", value: "6,000+" },
+      { label: "CRITICAL", value: String(totalCrit), color: "#ff3860" },
+      { label: "HIGH", value: String(totalHigh), color: "#ff8c00" },
+    ];
+    var sx = 48, sy = 148;
+    for (var si = 0; si < stats.length; si++) {
+      var s = stats[si];
+      ctx.fillStyle = "#1f2847";
+      roundRect(ctx, sx, sy - 34, 136, 52, 8);
+      ctx.fill();
+      ctx.fillStyle = s.color || "#00d4ff";
+      ctx.font = "bold 22px monospace";
+      ctx.fillText(s.value, sx + 10, sy - 6);
+      ctx.fillStyle = "#9ca3af";
+      ctx.font = "10px monospace";
+      ctx.fillText(s.label, sx + 10, sy + 10);
+      sx += 154;
+    }
+
+    // Two bar charts
+    var chartTop10 = allSorted.slice(0, 10);
+    var chartHunter = allSorted.filter(function(x) { return BUG_HUNTER_TARGETS.indexOf(x.tech) !== -1; }).slice(0, 10);
+
+    function drawBarChart(ctx, items, x, y, w, h, title, barColor) {
+      ctx.fillStyle = "#9ca3af";
+      ctx.font = "bold 11px monospace";
+      ctx.fillText(title, x, y - 8);
+
+      if (!items.length) return;
+      var maxVal = items[0].count;
+      var rowH = h / items.length;
+      var barMaxW = w - 160;
+
+      for (var i = 0; i < items.length; i++) {
+        var ry = y + i * rowH;
+        var bw = Math.max(4, Math.round((items[i].count / maxVal) * barMaxW));
+
+        // bar bg
+        ctx.fillStyle = "#151b34";
+        ctx.fillRect(x + 24, ry + 2, barMaxW, rowH - 6);
+
+        // bar fill
+        var bg = ctx.createLinearGradient(x + 24, 0, x + 24 + bw, 0);
+        bg.addColorStop(0, barColor);
+        bg.addColorStop(1, barColor + "99");
+        ctx.fillStyle = bg;
+        ctx.fillRect(x + 24, ry + 2, bw, rowH - 6);
+
+        // rank
+        ctx.fillStyle = "#9ca3af";
+        ctx.font = "10px monospace";
+        ctx.fillText("#" + (i + 1), x, ry + rowH - 10);
+
+        // label
+        ctx.fillStyle = "#e4e8f5";
+        ctx.font = "11px monospace";
+        var label = items[i].tech.length > 14 ? items[i].tech.slice(0, 13) + "\u2026" : items[i].tech;
+        ctx.fillText(label, x + 24 + bw + 6, ry + rowH - 9);
+      }
+    }
+
+    function roundRect(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    drawBarChart(ctx, chartTop10,  48,  230, 530, 330, "TOP EXPOSED TECHNOLOGIES", "#00ff88");
+    drawBarChart(ctx, chartHunter, 630, 230, 530, 330, "CRITICAL ATTACK SURFACE",  "#ff8c00");
+
+    // Footer
+    ctx.fillStyle = "#2d3748";
+    ctx.fillRect(0, H - 48, W, 48);
+    ctx.fillStyle = "#9ca3af";
+    ctx.font = "12px monospace";
+    ctx.fillText("esamlasheen.github.io/StackRecon", 48, H - 18);
+    ctx.fillStyle = "#00ff88";
+    ctx.font = "bold 12px monospace";
+    ctx.fillText("github.com/EsamLasheen/StackRecon", W - 310, H - 18);
+
+    // Show preview
+    canvas.style.maxWidth = "100%";
+    canvas.style.borderRadius = "8px";
+    if (previewWrap) previewWrap.appendChild(canvas);
+
+    if (stepImg) {
+      stepImg.className = "screenshot-step done";
+      stepImg.querySelector(".step-icon").textContent = "\u2713";
+      stepImg.querySelector("span:last-child").textContent = "Card ready — copy or download";
+    }
+
+    var dataUrl = canvas.toDataURL("image/png");
+    var scanDate = new Date().toISOString().slice(0, 10);
+
+    if (downloadBtn) {
+      downloadBtn.disabled = false;
+      downloadBtn.onclick = function () {
+        var a = document.createElement("a");
+        a.download = "stackrecon-" + scanDate + ".png";
+        a.href = dataUrl;
+        a.click();
+      };
+    }
+
+    if (copyImgBtn) {
+      copyImgBtn.disabled = false;
+      copyImgBtn.onclick = function () {
+        canvas.toBlob(function(blob) {
+          try {
+            var item = new ClipboardItem({ "image/png": blob });
+            navigator.clipboard.write([item]).then(function() {
+              copyImgBtn.textContent = "\u2713 Image copied! Now paste in LinkedIn";
+              copyImgBtn.classList.add("copied");
+              setTimeout(function() {
+                copyImgBtn.textContent = "\uD83D\uDCCB Copy image to clipboard";
+                copyImgBtn.classList.remove("copied");
+              }, 3000);
+            }).catch(function() {
+              // fallback: just download
+              downloadBtn.click();
+            });
+          } catch(e) { downloadBtn.click(); }
+        });
+      };
     }
 
     shareBtn.classList.add("shared");
@@ -703,12 +858,12 @@ function InsightsPanel(programs) {
   // Left: top 10 all techs
   chartsRow.appendChild(buildBarsCol("TOP EXPOSED TECHNOLOGIES", sorted, maxCount, "", 80));
 
-  // Right: top 10 hacker targets (include ones already in top10 too, full independent list)
+  // Right: critical attack surface — full independent ranked list
   var hunterList = allSorted.filter(function(x) {
     return BUG_HUNTER_TARGETS.indexOf(x.tech) !== -1;
   }).slice(0, 10);
   var hunterMax = hunterList.length > 0 ? hunterList[0].count : 1;
-  chartsRow.appendChild(buildBarsCol("TOP HACKER TARGETS", hunterList, hunterMax, "insight-bar-hunter", 80));
+  chartsRow.appendChild(buildBarsCol("CRITICAL ATTACK SURFACE", hunterList, hunterMax, "insight-bar-hunter", 80));
 
   panel.appendChild(chartsRow);
 
