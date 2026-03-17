@@ -10,7 +10,8 @@ window.stackrecon = window.stackrecon || {
   activeFilters: { tech: "", platform: "", reward: "", severity: "", name: "" },
 };
 
-var DATA_URL = "./data/data.json";
+var DATA_URL     = "./data/data.json";
+var PROGRESS_URL = "./data/progress.json";
 
 var resultsContainer, statsBar, techSelect, platformSelect, rewardSelect, severitySelect, nameInput, clearBtn;
 var copyAllBannerEl;
@@ -19,6 +20,91 @@ var insightsPanelEl;
 function C(name) { return window.stackrecon.components[name]; }
 function F(name) { return window.stackrecon.filters[name]; }
 function S(name) { return window.stackrecon.search[name]; }
+
+// ─────────────────────────────────────────────────────────────
+// Live scan progress overlay
+// ─────────────────────────────────────────────────────────────
+
+var scanOverlay      = null;
+var scanProgressBar  = null;
+var scanPhaseLabel   = null;
+var scanPhaseCounter = null;
+var scanElapsed      = null;
+var scanStatsRow     = null;
+var lastProgressStatus = "idle";
+var PROGRESS_POLL_MS   = 15000; // poll every 15s
+
+var PHASE_PCTS = { starting: 2, chaos: 10, httpx: 40, nuclei_vuln: 75, nuclei_info: 92, done: 100 };
+
+function initScanOverlay() {
+  scanOverlay      = document.getElementById("scan-overlay");
+  scanProgressBar  = document.getElementById("scan-progress-bar");
+  scanPhaseLabel   = document.getElementById("scan-phase-label");
+  scanPhaseCounter = document.getElementById("scan-phase-counter");
+  scanElapsed      = document.getElementById("scan-elapsed");
+  scanStatsRow     = document.getElementById("scan-stats-row");
+}
+
+function updateScanOverlay(p) {
+  if (!scanOverlay) return;
+
+  var isScanning = p.status === "scanning";
+
+  if (isScanning) {
+    scanOverlay.classList.remove("hidden");
+  } else {
+    scanOverlay.classList.add("hidden");
+    return;
+  }
+
+  // Phase label
+  if (scanPhaseLabel) scanPhaseLabel.textContent = p.phase_label || "Running…";
+
+  // Progress bar
+  var pct = PHASE_PCTS[p.phase] || Math.round((p.phase_number / p.total_phases) * 100);
+  if (scanProgressBar) scanProgressBar.style.width = pct + "%";
+
+  // Phase counter
+  if (scanPhaseCounter) {
+    scanPhaseCounter.textContent = "Phase " + (p.phase_number || 0) + " / " + (p.total_phases || 4);
+  }
+
+  // Elapsed time
+  if (scanElapsed && p.started_at) {
+    var elapsed = Math.round((Date.now() - new Date(p.started_at).getTime()) / 1000);
+    var mins = Math.floor(elapsed / 60);
+    var secs = elapsed % 60;
+    scanElapsed.textContent = mins + "m " + (secs < 10 ? "0" : "") + secs + "s elapsed";
+  }
+
+  // Stats row
+  if (scanStatsRow) {
+    var parts = [];
+    if (p.programs_loaded)    parts.push("<span>" + p.programs_loaded.toLocaleString() + " programs</span>");
+    if (p.hostnames_total)    parts.push("<span>" + p.hostnames_total.toLocaleString() + " subdomains</span>");
+    if (p.detections_so_far)  parts.push("<span>" + p.detections_so_far.toLocaleString() + " live hosts</span>");
+    if (p.vuln_findings)      parts.push('<span class="sev-stat-critical">' + p.vuln_findings + " vulns found</span>");
+    scanStatsRow.innerHTML = parts.join("");
+  }
+}
+
+function pollProgress() {
+  fetch(PROGRESS_URL + "?t=" + Date.now(), { cache: "no-store" })
+    .then(function(resp) { if (!resp.ok) throw new Error("no progress"); return resp.json(); })
+    .then(function(p) {
+      updateScanOverlay(p);
+      // If scan just finished, reload data
+      if (lastProgressStatus === "scanning" && p.status === "idle") {
+        fetchData();
+      }
+      lastProgressStatus = p.status || "idle";
+    })
+    .catch(function() {});
+}
+
+// ─────────────────────────────────────────────────────────────
+// Header stats
+// ─────────────────────────────────────────────────────────────
 
 function updateHeaderStats(programs, totalDetections, totalTechs) {
   var chipsContainer = document.getElementById("header-stats");
@@ -306,8 +392,14 @@ document.addEventListener("DOMContentLoaded", function () {
   nameInput         = document.getElementById("name-search");
   clearBtn          = document.getElementById("clear-filters");
 
+  initScanOverlay();
   wireControls();
   initCopyAllBanner();
+
+  // Start progress polling immediately
+  pollProgress();
+  setInterval(pollProgress, PROGRESS_POLL_MS);
+
   fetchData().then(function () {
     setInterval(checkForUpdates, REFRESH_INTERVAL_MS);
   });

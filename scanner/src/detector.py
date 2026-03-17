@@ -202,6 +202,7 @@ def run_nuclei(
     concurrency: int = 50,
     rate_limit: int = 150,
     timeout: int = 10,
+    templates_path: str | None = None,
 ) -> list[dict[str, Any]]:
     """Run nuclei with misconfiguration/exposure/default-login templates.
 
@@ -210,6 +211,7 @@ def run_nuclei(
         concurrency: Parallel template executions.
         rate_limit: Max requests per second.
         timeout: Per-request timeout in seconds.
+        templates_path: Path to custom templates directory; uses built-in tags when None.
 
     Returns:
         List of finding dicts: hostname, template_id, name, severity, matched_at, description.
@@ -222,14 +224,21 @@ def run_nuclei(
         # nuclei accepts bare hostnames directly
         tmpfile.write_text("\n".join(hostnames) + "\n", encoding="utf-8")
 
+        if templates_path:
+            template_args = ["-t", templates_path]
+        else:
+            template_args = [
+                "-tags",
+                "cve,vuln,takeover,exposure,misconfig,default-login,"
+                "auth-bypass,unauth,cors,redirect,lfi,rfi,rce,"
+                "sqli,xss,xxe,ssrf,idor,ssti,inject",
+            ]
+
         cmd = [
             "nuclei",
             "-l",
             str(tmpfile),
-            "-tags",
-            "cve,vuln,takeover,exposure,misconfig,default-login,"
-            "auth-bypass,unauth,cors,redirect,lfi,rfi,rce,"
-            "sqli,xss,xxe,ssrf,idor,ssti,inject",
+            *template_args,
             "-severity",
             "critical,high,medium,low",
             "-j",  # JSON output (short flag)

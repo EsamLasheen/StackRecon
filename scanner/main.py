@@ -13,9 +13,24 @@ from scanner.src.detector import run_httpx_binary, run_nuclei, run_nuclei_info
 from scanner.src.fetcher import SourceUnavailableError, fetch_chaos_index
 from scanner.src.writer import write_atomic
 
-SCANNER_VERSION = "3.0.0"
+SCANNER_VERSION = "4.0.0"
 
 SEVERITY_ORDER = {"critical": 4, "high": 3, "medium": 2, "low": 1, "info": 0, "none": -1}
+
+
+def _now() -> str:
+    return datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _write_progress(path: str | None, payload: dict) -> None:
+    """Write progress.json atomically; silently ignore failures."""
+    if not path:
+        return
+    payload["updated_at"] = _now()
+    try:
+        write_atomic(payload, path)
+    except Exception:
+        pass
 
 
 def _hostnames_for_program(entry: dict) -> list[str]:
@@ -31,7 +46,7 @@ def _hostnames_for_program(entry: dict) -> list[str]:
                 domains = [host]
 
     # Focused on subdomains most likely to expose security-relevant services.
-    # Deliberately concise — 798 programs × many domains × prefixes = huge scan.
+    # Deliberately concise — 800+ programs × many domains × prefixes = huge scan.
     prefixes = [
         # Root + common web
         "",
@@ -78,11 +93,39 @@ def _hostnames_for_program(entry: dict) -> list[str]:
 
 async def run(config) -> int:
     """Main async scan pipeline."""
+    started_at = _now()
+    progress_path = config.progress
+
+    _write_progress(progress_path, {
+        "status": "scanning",
+        "phase": "chaos",
+        "phase_label": "Fetching bug bounty program index…",
+        "phase_number": 1,
+        "total_phases": 4,
+        "started_at": started_at,
+        "programs_loaded": 0,
+        "hostnames_total": 0,
+        "detections_so_far": 0,
+        "vuln_findings": 0,
+    })
+
     print("Fetching Chaos program index…")
     try:
         index = await fetch_chaos_index(api_key=config.api_key, limit=config.limit)
     except SourceUnavailableError as exc:
         print(f"[ERROR] {exc} — aborting", file=sys.stderr)
+        _write_progress(progress_path, {
+            "status": "error",
+            "phase": "chaos",
+            "phase_label": f"Failed to fetch program index: {exc}",
+            "phase_number": 1,
+            "total_phases": 4,
+            "started_at": started_at,
+            "programs_loaded": 0,
+            "hostnames_total": 0,
+            "detections_so_far": 0,
+            "vuln_findings": 0,
+        })
         return 1
 
     total = len(index)
@@ -129,6 +172,19 @@ async def run(config) -> int:
         f"({config.workers} threads)…"
     )
 
+    _write_progress(progress_path, {
+        "status": "scanning",
+        "phase": "httpx",
+        "phase_label": f"Tech detection — probing {total_probed:,} subdomains",
+        "phase_number": 2,
+        "total_phases": 4,
+        "started_at": started_at,
+        "programs_loaded": total,
+        "hostnames_total": total_probed,
+        "detections_so_far": 0,
+        "vuln_findings": 0,
+    })
+
     raw_detections = run_httpx_binary(
         hostnames=all_hostnames,
         threads=config.workers,
@@ -144,16 +200,45 @@ async def run(config) -> int:
 
     # 1) Vuln scan — real reportable bugs (private only)
     print(f"Running nuclei vuln scan on {len(detected_hosts)} live hosts…")
+
+    _write_progress(progress_path, {
+        "status": "scanning",
+        "phase": "nuclei_vuln",
+        "phase_label": f"Vulnerability scan — {len(detected_hosts):,} live hosts",
+        "phase_number": 3,
+        "total_phases": 4,
+        "started_at": started_at,
+        "programs_loaded": total,
+        "hostnames_total": total_probed,
+        "detections_so_far": total_detections,
+        "vuln_findings": 0,
+    })
+
     nuclei_findings = run_nuclei(
         hostnames=detected_hosts,
         concurrency=config.workers,
         rate_limit=200,
         timeout=10,
+        templates_path=config.templates,
     )
     print(f"Nuclei vulns — {len(nuclei_findings)} findings.")
 
     # 2) Info scan — WAF/tech/cloud detection (public site)
     print(f"Running nuclei info scan on {len(detected_hosts)} live hosts…")
+
+    _write_progress(progress_path, {
+        "status": "scanning",
+        "phase": "nuclei_info",
+        "phase_label": "Info scan — WAF & tech fingerprinting",
+        "phase_number": 4,
+        "total_phases": 4,
+        "started_at": started_at,
+        "programs_loaded": total,
+        "hostnames_total": total_probed,
+        "detections_so_far": total_detections,
+        "vuln_findings": len(nuclei_findings),
+    })
+
     nuclei_info = run_nuclei_info(
         hostnames=detected_hosts,
         concurrency=config.workers,
@@ -247,11 +332,10 @@ async def run(config) -> int:
             }
         )
 
+    generated_at = _now()
     data = {
         "meta": {
-            "generated_at": (
-                datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
-            ),
+            "generated_at": generated_at,
             "programs_scanned": len(programs_out),
             "programs_failed": programs_failed,
             "total_subdomains_probed": total_probed,
@@ -283,6 +367,21 @@ async def run(config) -> int:
     except OSError as exc:
         print(f"[ERROR] Failed to write output: {exc}", file=sys.stderr)
         return 3
+
+    # Mark scan complete in progress.json
+    _write_progress(progress_path, {
+        "status": "idle",
+        "phase": "done",
+        "phase_label": "Scan complete",
+        "phase_number": 4,
+        "total_phases": 4,
+        "started_at": started_at,
+        "last_scan": generated_at,
+        "programs_loaded": total,
+        "hostnames_total": total_probed,
+        "detections_so_far": total_detections,
+        "vuln_findings": total_vuln_findings,
+    })
 
     print(f"Public report: {config.output}")
     print(f"\nDone. {len(programs_out)} programs written.")

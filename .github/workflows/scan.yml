@@ -1,9 +1,9 @@
-name: Daily Scan
+name: Weekly Scan
 
 on:
   schedule:
-    # Every day at 02:00 UTC
-    - cron: "0 2 * * *"
+    # Every Monday at 02:00 UTC
+    - cron: "0 2 * * 1"
   workflow_dispatch:
     inputs:
       limit:
@@ -39,24 +39,80 @@ jobs:
       - name: Install nuclei
         run: |
           go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
-          nuclei -update-templates -ut 2>/dev/null || true
+          echo "$HOME/go/bin" >> $GITHUB_PATH
+
+      - name: Clone custom nuclei templates
+        run: |
+          git clone --depth=1 https://github.com/emadshanab/Nuclei-Templates-Collection /tmp/nuclei-templates
+          echo "Templates cloned: $(find /tmp/nuclei-templates -name '*.yaml' | wc -l) templates"
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Mark scan started
+        run: |
+          python3 -c "
+          import json, datetime, os
+          now = datetime.datetime.utcnow().isoformat() + 'Z'
+          os.makedirs('docs/data', exist_ok=True)
+          progress = {
+            'status': 'scanning',
+            'phase': 'starting',
+            'phase_label': 'Scan initializing...',
+            'phase_number': 0,
+            'total_phases': 4,
+            'started_at': now,
+            'updated_at': now,
+            'programs_loaded': 0,
+            'hostnames_total': 0,
+            'detections_so_far': 0,
+            'vuln_findings': 0,
+          }
+          with open('docs/data/progress.json', 'w') as f:
+              json.dump(progress, f, indent=2)
+          "
+          git add docs/data/progress.json
+          git diff --cached --quiet || git commit -m "scan: started [skip ci]"
+          git push
 
       - name: Run scanner
         run: |
+          # Background process: push progress.json every 5 minutes during scan
+          (while true; do
+            sleep 300
+            if [ -f docs/data/progress.json ]; then
+              git add docs/data/progress.json
+              git diff --cached --quiet || {
+                git commit -m "scan: progress update [skip ci]"
+                git pull --rebase origin main || true
+                git push || true
+              }
+            fi
+          done) &
+          PUSHER_PID=$!
+
           if [ -n "${{ github.event.inputs.limit }}" ]; then
             python3 -m scanner.main \
               --limit ${{ github.event.inputs.limit }} \
               --workers 300 \
               --connect-timeout 1 \
               --read-timeout 3 \
-              --output docs/data/data.json
+              --output docs/data/data.json \
+              --templates /tmp/nuclei-templates \
+              --progress docs/data/progress.json
           else
             python3 -m scanner.main \
               --workers 300 \
               --connect-timeout 1 \
               --read-timeout 3 \
-              --output docs/data/data.json
+              --output docs/data/data.json \
+              --templates /tmp/nuclei-templates \
+              --progress docs/data/progress.json
           fi
+
+          kill $PUSHER_PID 2>/dev/null || true
 
       - name: Upload full report (private — only repo owner can download)
         uses: actions/upload-artifact@v4
@@ -65,17 +121,15 @@ jobs:
           path: docs/data/data-full.json
           retention-days: 90
 
-      - name: Commit updated data.json
+      - name: Commit results
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f docs/data/data.json
+          git add -f docs/data/data.json docs/data/progress.json
           git diff --cached --quiet && echo "No changes to commit" || \
-            git commit -m "data: update scan results [$(date -u '+%Y-%m-%d')]"
+            git commit -m "data: weekly scan results [$(date -u '+%Y-%m-%d')]"
           git pull --rebase origin main || {
-            echo "Rebase conflict — taking our scan results"
-            git checkout --theirs docs/data/data.json
-            git add docs/data/data.json
+            echo "Rebase conflict — keeping our scan results"
+            git checkout --theirs docs/data/data.json docs/data/progress.json
+            git add docs/data/data.json docs/data/progress.json
             git rebase --continue
           }
           git push

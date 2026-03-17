@@ -102,6 +102,26 @@
     <span>Last updated: <span id="last-updated">—</span></span>
   </footer>
 
+  <!-- Live scan progress overlay — shown when a scan is in progress -->
+  <div id="scan-overlay" class="scan-overlay hidden" role="status" aria-live="polite">
+    <div class="scan-overlay-card">
+      <div class="scan-pulse-ring"></div>
+      <div class="scan-overlay-header">
+        <span class="scan-live-badge">LIVE</span>
+        <span class="scan-overlay-title">Scan in progress</span>
+      </div>
+      <p id="scan-phase-label" class="scan-phase-label">Initializing…</p>
+      <div class="scan-progress-track">
+        <div id="scan-progress-bar" class="scan-progress-bar" style="width:0%"></div>
+      </div>
+      <div class="scan-progress-meta">
+        <span id="scan-phase-counter" class="scan-phase-counter">Phase 0 / 4</span>
+        <span id="scan-elapsed" class="scan-elapsed"></span>
+      </div>
+      <div id="scan-stats-row" class="scan-stats-row"></div>
+    </div>
+  </div>
+
   <script src="js/filters.js"></script>
   <script src="js/components.js"></script>
   <script src="js/search.js"></script>

@@ -16,6 +16,8 @@ class ScanConfig:
     read_timeout: int = 7
     output: str = "docs/data/data.json"
     api_key: str | None = None
+    templates: str | None = None
+    progress: str | None = None
 
 
 def _validate_range(
@@ -81,6 +83,21 @@ def parse_cli_args(args: list[str] | None = None) -> ScanConfig:
         dest="api_key",
         help="Chaos API key (omit to use public GitHub source)",
     )
+    parser.add_argument(
+        "--templates",
+        type=str,
+        default=None,
+        metavar="PATH",
+        help="Path to custom nuclei templates directory (default: nuclei built-in)",
+    )
+    parser.add_argument(
+        "--progress",
+        type=str,
+        default=None,
+        metavar="PATH",
+        dest="progress",
+        help="Path to write live progress JSON (e.g. docs/data/progress.json)",
+    )
 
     parsed = parser.parse_args(args)
 
@@ -97,4 +114,6 @@ def parse_cli_args(args: list[str] | None = None) -> ScanConfig:
         read_timeout=parsed.read_timeout,
         output=parsed.output,
         api_key=parsed.api_key,
+        templates=parsed.templates,
+        progress=parsed.progress,
     )
