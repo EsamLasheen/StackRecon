@@ -41,10 +41,15 @@ jobs:
           go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
           echo "$HOME/go/bin" >> $GITHUB_PATH
 
-      - name: Clone custom nuclei templates
+      - name: Download nuclei templates
         run: |
-          git clone --depth=1 https://github.com/emadshanab/Nuclei-Templates-Collection /tmp/nuclei-templates
-          echo "Templates cloned: $(find /tmp/nuclei-templates -name '*.yaml' | wc -l) templates"
+          # Official ProjectDiscovery templates — same source emadshanab aggregates from.
+          # The bulk_clone approach in emadshanab/Nuclei-Templates-Collection clones 200+
+          # repos sequentially, which would take hours and time out in CI.
+          # nuclei -update-templates downloads the full official set in one shot (~7000 templates).
+          nuclei -update-templates -duc 2>&1 | tail -5
+          TMPL_DIR="$HOME/nuclei-templates"
+          echo "Templates ready: $(find $TMPL_DIR -name '*.yaml' 2>/dev/null | wc -l) templates"
 
       - name: Configure git
         run: |
@@ -111,7 +116,6 @@ jobs:
             --connect-timeout 1 \
             --read-timeout 3 \
             --output docs/data/data.json \
-            --templates /tmp/nuclei-templates \
             --progress docs/data/progress.json
 
           kill $PUSHER_PID 2>/dev/null || true
