@@ -1,14 +1,13 @@
 {
-  "status": "idle",
-  "phase": "done",
-  "phase_label": "Scan complete",
-  "phase_number": 4,
+  "status": "scanning",
+  "phase": "starting",
+  "phase_label": "Scan initializing...",
+  "phase_number": 0,
   "total_phases": 4,
-  "started_at": "2026-03-17T08:33:42.499707Z",
-  "last_scan": "2026-03-17T10:20:00.979456Z",
-  "programs_loaded": 798,
-  "hostnames_total": 102600,
-  "detections_so_far": 6047,
-  "vuln_findings": 0,
-  "updated_at": "2026-03-17T10:20:01.138256Z"
+  "started_at": "2026-03-18T04:02:59.819710Z",
+  "updated_at": "2026-03-18T04:02:59.819710Z",
+  "programs_loaded": 0,
+  "hostnames_total": 0,
+  "detections_so_far": 0,
+  "vuln_findings": 0
 }
