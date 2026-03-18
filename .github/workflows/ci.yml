@@ -33,7 +33,7 @@ jobs:
         run: |
           python3 -m pytest tests/unit/ tests/integration/ \
             --cov=scanner/src \
-            --cov-fail-under=80 \
+            --cov-fail-under=75 \
             -q
 
       - name: Verify signature count

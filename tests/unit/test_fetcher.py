@@ -24,7 +24,7 @@ SAMPLE_INDEX = [
 
 CHAOS_GITHUB_URL = (
     "https://raw.githubusercontent.com/projectdiscovery/"
-    "public-bugbounty-programs/main/chaos-bugbounty-list.json"
+    "public-bugbounty-programs/main/dist/data.json"
 )
 
 

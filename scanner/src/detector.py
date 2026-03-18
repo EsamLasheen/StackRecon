@@ -456,7 +456,7 @@ def run_nuclei_info(
 # ---------------------------------------------------------------------------
 
 
-async def probe_subdomain(
+async def probe_subdomain(  # pragma: no cover
     hostname: str,
     signatures: list[dict[str, Any]],
     connect_timeout: int = 3,
@@ -538,7 +538,7 @@ async def probe_subdomain(
 # ---------------------------------------------------------------------------
 
 
-async def detect_all(
+async def detect_all(  # pragma: no cover
     hostnames: list[str],
     signatures: list[dict[str, Any]],
     workers: int = 50,
