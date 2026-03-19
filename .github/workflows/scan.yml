@@ -43,11 +43,25 @@ jobs:
 
       - name: Download nuclei templates
         run: |
-          # Clone the official ProjectDiscovery nuclei-templates directly.
-          # nuclei -update-templates can silently fail in CI due to GitHub rate limits.
-          # Direct git clone is reliable and gives us the exact path we need.
+          mkdir -p $HOME/nuclei-templates
+
+          # 1) Official ProjectDiscovery templates as the base
           git clone --depth=1 https://github.com/projectdiscovery/nuclei-templates \
-            $HOME/nuclei-templates
+            $HOME/nuclei-templates/projectdiscovery
+
+          # 2) emadshanab community collection — clone all 200+ repos in parallel
+          #    (20 at a time, 30s timeout per repo so broken/private repos don't block)
+          git clone --depth=1 https://github.com/emadshanab/Nuclei-Templates-Collection \
+            /tmp/nuclei-collection
+
+          grep -E '^https://github\.com/' /tmp/nuclei-collection/README.txt \
+            | sort -u \
+            | xargs -P 20 -I {} bash -c '
+                name=$(echo "{}" | sed "s|https://github.com/||" | tr "/" "__" | tr -cd "a-zA-Z0-9_-")
+                timeout 30 git clone --depth=1 --quiet "{}" \
+                  "$HOME/nuclei-templates/$name" 2>/dev/null || true
+              '
+
           echo "Templates ready: $(find $HOME/nuclei-templates -name '*.yaml' | wc -l) templates"
 
       - name: Configure git
