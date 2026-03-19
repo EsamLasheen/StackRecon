@@ -53,14 +53,15 @@ jobs:
           cd /tmp/nuclei-collection
 
           # Step 1: Clone all community template repos (--depth=1 for speed)
+          # PD official templates are already in emadshanab's list —
+          # the script clones them to community-templates/projectdiscovery__nuclei-templates
+          # which is exactly what remove_duplicated_templates.py expects as source of truth.
+          # Patch: --depth=1 for speed, ignore clone failures (private/deleted repos)
           sed -i 's/"git", "clone", url/"git", "clone", "--depth=1", url/' bulk_clone_repos.py
-          python3 bulk_clone_repos.py
+          sed -i 's/subprocess.run(\[/subprocess.run([/;s/\], capture_output=False)/])/' bulk_clone_repos.py
+          python3 bulk_clone_repos.py || true
 
-          # Step 2: Official PD templates as the source of truth for dedup
-          git clone --depth=1 https://github.com/projectdiscovery/nuclei-templates \
-            community-templates/projectdiscovery__nuclei-templates
-
-          # Step 3: Remove duplicates + categorize into clean directories
+          # Step 2: Remove duplicates + categorize into clean directories
           python3 remove_duplicated_templates.py
 
           echo "Categorized templates: $(find categorized_templates -name '*.yaml' | wc -l)"
