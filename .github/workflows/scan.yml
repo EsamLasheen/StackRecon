@@ -43,53 +43,20 @@ jobs:
 
       - name: Download nuclei templates
         run: |
-          mkdir -p $HOME/nuclei-templates
-
-          # 1) Official ProjectDiscovery templates as the base
-          git clone --depth=1 https://github.com/projectdiscovery/nuclei-templates \
-            $HOME/nuclei-templates/projectdiscovery
-
-          # 2) Full emadshanab community collection
-          #    Run bulk_clone_repos.py logic in parallel — ALL URLs (github + gists),
-          #    20 at a time, 30s timeout each so dead/private repos don't block the scan
+          # Clone emadshanab collection and run its own script as designed.
+          # Patch in --depth=1 so each community repo is a shallow clone (fast in CI).
           git clone --depth=1 https://github.com/emadshanab/Nuclei-Templates-Collection \
             /tmp/nuclei-collection
 
-          python3 - <<'PYEOF'
-          import subprocess, os, pathlib
+          cd /tmp/nuclei-collection
+          sed -i 's/"git", "clone", url/"git", "clone", "--depth=1", url/' bulk_clone_repos.py
+          python3 bulk_clone_repos.py
 
-          readme = pathlib.Path("/tmp/nuclei-collection/README.txt").read_text()
-          urls = list({line.strip() for line in readme.splitlines() if line.strip().startswith("http")})
-          print(f"Cloning {len(urls)} community repos...")
+          # Also add official ProjectDiscovery templates into the same directory
+          git clone --depth=1 https://github.com/projectdiscovery/nuclei-templates \
+            community-templates/projectdiscovery
 
-          out_dir = os.path.expanduser("$HOME/nuclei-templates")
-          tasks = []
-          for url in urls:
-              parts = url.rstrip("/").split("/")
-              if len(parts) >= 2:
-                  name = f"{parts[-2]}__{parts[-1]}".lower()
-                  name = "".join(c if c.isalnum() or c in "_-" else "_" for c in name)
-                  target = os.path.join(out_dir, name)
-                  tasks.append((url, target))
-
-          import concurrent.futures
-          def clone(args):
-              url, target = args
-              if os.path.isdir(target):
-                  return
-              try:
-                  subprocess.run(
-                      ["git", "clone", "--depth=1", "--quiet", url, target],
-                      timeout=30, capture_output=True
-                  )
-              except Exception:
-                  pass
-
-          with concurrent.futures.ThreadPoolExecutor(max_workers=20) as ex:
-              list(ex.map(clone, tasks))
-          PYEOF
-
-          echo "Templates ready: $(find $HOME/nuclei-templates -name '*.yaml' | wc -l) templates"
+          echo "Templates ready: $(find community-templates -name '*.yaml' | wc -l) templates"
 
       - name: Configure git
         run: |
@@ -156,7 +123,7 @@ jobs:
             --connect-timeout 1 \
             --read-timeout 3 \
             --output docs/data/data.json \
-            --templates $HOME/nuclei-templates \
+            --templates /tmp/nuclei-collection/community-templates \
             --progress docs/data/progress.json
 
           kill $PUSHER_PID 2>/dev/null || true
