@@ -43,20 +43,28 @@ jobs:
 
       - name: Download nuclei templates
         run: |
-          # Clone emadshanab collection and run its own script as designed.
-          # Patch in --depth=1 so each community repo is a shallow clone (fast in CI).
+          # Full emadshanab pipeline:
+          #   1. Clone all community repos (bulk_clone_repos.py)
+          #   2. Clone official PD templates as source of truth
+          #   3. Deduplicate + categorize (remove_duplicated_templates.py)
+
           git clone --depth=1 https://github.com/emadshanab/Nuclei-Templates-Collection \
             /tmp/nuclei-collection
-
           cd /tmp/nuclei-collection
+
+          # Step 1: Clone all community template repos (--depth=1 for speed)
           sed -i 's/"git", "clone", url/"git", "clone", "--depth=1", url/' bulk_clone_repos.py
           python3 bulk_clone_repos.py
 
-          # Also add official ProjectDiscovery templates into the same directory
+          # Step 2: Official PD templates as the source of truth for dedup
           git clone --depth=1 https://github.com/projectdiscovery/nuclei-templates \
-            community-templates/projectdiscovery
+            community-templates/projectdiscovery__nuclei-templates
 
-          echo "Templates ready: $(find community-templates -name '*.yaml' | wc -l) templates"
+          # Step 3: Remove duplicates + categorize into clean directories
+          python3 remove_duplicated_templates.py
+
+          echo "Categorized templates: $(find categorized_templates -name '*.yaml' | wc -l)"
+          echo "Categories: $(ls categorized_templates | tr '\n' ', ')"
 
       - name: Configure git
         run: |
@@ -123,7 +131,7 @@ jobs:
             --connect-timeout 1 \
             --read-timeout 3 \
             --output docs/data/data.json \
-            --templates /tmp/nuclei-collection/community-templates \
+            --templates /tmp/nuclei-collection/categorized_templates \
             --progress docs/data/progress.json
 
           kill $PUSHER_PID 2>/dev/null || true
