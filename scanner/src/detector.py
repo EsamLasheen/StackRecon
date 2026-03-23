@@ -117,7 +117,7 @@ def run_httpx_binary(
     hostnames: list[str],
     threads: int = 50,
     timeout: int = 10,
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], list[str]]:
     """Run the projectdiscovery/httpx binary with Wappalyzer tech detection.
 
     Requires the `httpx` binary to be installed and on PATH.
@@ -128,11 +128,13 @@ def run_httpx_binary(
         timeout:   Per-request timeout in seconds.
 
     Returns:
-        List of detection dicts for hosts where at least one tech was detected.
-        Each dict has: hostname, technologies, http_status, probe_error.
+        Tuple of:
+          - List of detection dicts for hosts where at least one tech was detected.
+            Each dict has: hostname, technologies, http_status, probe_error.
+          - List of ALL hostnames that responded (including those with no tech).
     """
     if not hostnames:
-        return []
+        return [], []
 
     tmpfile = Path(tempfile.mktemp(suffix=".txt"))
     try:
@@ -161,21 +163,29 @@ def run_httpx_binary(
         )
 
         detections: list[dict[str, Any]] = []
+        all_responding: list[str] = []
+        seen_responding: set[str] = set()
         for line in result.stdout.splitlines():
             line = line.strip()
             if not line:
                 continue
             try:
                 data = json.loads(line)
+                # Prefer 'input' field (original hostname); fall back to parsed url
+                host = data.get("input", data.get("url", ""))
+                if "://" in host:
+                    host = host.split("://", 1)[1].split("/")[0]
+
+                # Track all responding hosts for nuclei scanning
+                if host and host not in seen_responding:
+                    all_responding.append(host)
+                    seen_responding.add(host)
+
                 techs = data.get("tech", [])
                 if not techs:
                     continue
                 # Strip version numbers: "Nginx:1.18.0" -> "Nginx"
                 clean_techs = [t.split(":")[0] for t in techs]
-                # Prefer 'input' field (original hostname); fall back to parsed url
-                host = data.get("input", data.get("url", ""))
-                if "://" in host:
-                    host = host.split("://", 1)[1].split("/")[0]
                 detections.append(
                     {
                         "hostname": host,
@@ -187,7 +197,7 @@ def run_httpx_binary(
             except json.JSONDecodeError:
                 continue
 
-        return detections
+        return detections, all_responding
     finally:
         tmpfile.unlink(missing_ok=True)
 

@@ -231,9 +231,10 @@ def _make_httpx_line(host, techs):
 
 
 def test_run_httpx_binary_empty_returns_empty():
-    """Empty hostname list returns empty list without calling subprocess."""
-    result = run_httpx_binary([])
-    assert result == []
+    """Empty hostname list returns empty tuple without calling subprocess."""
+    detections, responding = run_httpx_binary([])
+    assert detections == []
+    assert responding == []
 
 
 def test_run_httpx_binary_parses_output():
@@ -245,23 +246,28 @@ def test_run_httpx_binary_parses_output():
         "",  # blank line should be skipped
     ])
     with patch("scanner.src.detector.subprocess.run", return_value=mock_result):
-        results = run_httpx_binary(["grafana.example.com", "api.example.com"])
+        detections, responding = run_httpx_binary(["grafana.example.com", "api.example.com"])
 
-    assert len(results) == 2
-    grafana = next(r for r in results if r["hostname"] == "grafana.example.com")
+    assert len(detections) == 2
+    grafana = next(r for r in detections if r["hostname"] == "grafana.example.com")
     assert "Grafana" in grafana["technologies"]
     assert "Nginx" in grafana["technologies"]
     # Version stripped
     assert not any(":" in t for t in grafana["technologies"])
+    # All responding hosts tracked
+    assert "grafana.example.com" in responding
+    assert "api.example.com" in responding
 
 
 def test_run_httpx_binary_skips_no_tech_lines():
-    """Hosts with empty tech list are excluded from results."""
+    """Hosts with empty tech list are excluded from detections but tracked as responding."""
     mock_result = MagicMock()
     mock_result.stdout = json.dumps({"input": "plain.example.com", "tech": [], "status-code": 200})
     with patch("scanner.src.detector.subprocess.run", return_value=mock_result):
-        results = run_httpx_binary(["plain.example.com"])
-    assert results == []
+        detections, responding = run_httpx_binary(["plain.example.com"])
+    assert detections == []
+    # But the host DID respond — it should be in responding list for nuclei
+    assert "plain.example.com" in responding
 
 
 def test_run_httpx_binary_skips_invalid_json():
@@ -269,9 +275,10 @@ def test_run_httpx_binary_skips_invalid_json():
     mock_result = MagicMock()
     mock_result.stdout = "not json\n" + _make_httpx_line("ok.example.com", ["Nginx"])
     with patch("scanner.src.detector.subprocess.run", return_value=mock_result):
-        results = run_httpx_binary(["ok.example.com"])
-    assert len(results) == 1
-    assert results[0]["hostname"] == "ok.example.com"
+        detections, responding = run_httpx_binary(["ok.example.com"])
+    assert len(detections) == 1
+    assert detections[0]["hostname"] == "ok.example.com"
+    assert "ok.example.com" in responding
 
 
 # ---------------------------------------------------------------------------

@@ -191,8 +191,12 @@ function RewardBadge(rewardType) {
 function ProgramCard(program, activeTech) {
   activeTech = activeTech || null;
 
+  var isNew = window.stackrecon._newPrograms && window.stackrecon._newPrograms.indexOf(program.name) !== -1;
+
   var card = el("div", {
-    "class": "program-card" + (program.severity && program.severity !== "none" ? " has-findings sev-card-" + program.severity : ""),
+    "class": "program-card" +
+      (program.severity && program.severity !== "none" ? " has-findings sev-card-" + program.severity : "") +
+      (isNew ? " program-new" : ""),
     role: "button",
     tabindex: "0",
     "data-program-name": program.name,
@@ -201,7 +205,12 @@ function ProgramCard(program, activeTech) {
 
   // ---- Card header row ----
   var header = el("div", { "class": "card-header" });
-  header.appendChild(el("h3", { "class": "card-title", text: program.name }));
+  var titleWrap = el("div", { "class": "card-title-wrap" });
+  titleWrap.appendChild(el("h3", { "class": "card-title", text: program.name }));
+  if (isNew) {
+    titleWrap.appendChild(el("span", { "class": "badge badge-new", text: "NEW" }));
+  }
+  header.appendChild(titleWrap);
 
   // Severity badge
   if (program.severity && program.severity !== "none") {
@@ -877,17 +886,200 @@ function InsightsPanel(programs) {
 }
 
 // ============================================================
+// DiffPanel(diff) — New Attack Surface section
+// Shows what changed since the last scan: new programs, hosts, techs
+// ============================================================
+
+function DiffPanel(diff) {
+  if (!diff) return null;
+
+  var hasChanges = (diff.summary.new_programs > 0 ||
+                    diff.summary.new_hosts > 0 ||
+                    diff.summary.new_techs > 0);
+  if (!hasChanges) return null;
+
+  var panel = el("div", {
+    id: "diff-panel",
+    "class": "diff-panel",
+    "aria-label": "New attack surface since last scan",
+  });
+
+  // Header
+  var header = el("div", { "class": "diff-header" });
+  header.appendChild(el("span", { "class": "diff-title", text: "NEW ATTACK SURFACE" }));
+  header.appendChild(el("span", { "class": "diff-subtitle", text: "Changes since last scan" }));
+  panel.appendChild(header);
+
+  // Stats row
+  var statsRow = el("div", { "class": "diff-stats" });
+
+  if (diff.summary.new_programs > 0) {
+    var progStat = el("span", { "class": "diff-stat diff-stat-programs" });
+    progStat.innerHTML = "<strong>" + diff.summary.new_programs + "</strong> new program" +
+      (diff.summary.new_programs !== 1 ? "s" : "");
+    statsRow.appendChild(progStat);
+  }
+  if (diff.summary.new_hosts > 0) {
+    var hostStat = el("span", { "class": "diff-stat diff-stat-hosts" });
+    hostStat.innerHTML = "<strong>" + diff.summary.new_hosts + "</strong> new host" +
+      (diff.summary.new_hosts !== 1 ? "s" : "");
+    statsRow.appendChild(hostStat);
+  }
+  if (diff.summary.new_techs > 0) {
+    var techStat = el("span", { "class": "diff-stat diff-stat-techs" });
+    techStat.innerHTML = "<strong>" + diff.summary.new_techs + "</strong> new tech" +
+      (diff.summary.new_techs !== 1 ? "s" : "") + " on existing hosts";
+    statsRow.appendChild(techStat);
+  }
+  panel.appendChild(statsRow);
+
+  // New hosts list (clickable, copyable)
+  if (diff.new_hosts && diff.new_hosts.length > 0) {
+    var hostSection = el("div", { "class": "diff-hosts-section" });
+    var hostHeader = el("div", { "class": "diff-section-header" });
+    hostHeader.appendChild(el("span", { text: "New Hosts" }));
+
+    var copyNewBtn = el("button", {
+      "class": "btn-copy-all",
+      type: "button",
+      text: "Copy " + diff.new_hosts.length + " hosts",
+    });
+    copyNewBtn.addEventListener("click", function () {
+      copyToClipboard(diff.new_hosts.join("\n"), copyNewBtn, "Copy " + diff.new_hosts.length + " hosts", "Copied!");
+    });
+    hostHeader.appendChild(copyNewBtn);
+    hostSection.appendChild(hostHeader);
+
+    var maxShow = Math.min(diff.new_hosts.length, 20);
+    var hostList = el("div", { "class": "diff-host-list" });
+    for (var i = 0; i < maxShow; i++) {
+      hostList.appendChild(el("span", { "class": "diff-host-item", text: diff.new_hosts[i] }));
+    }
+    if (diff.new_hosts.length > 20) {
+      hostList.appendChild(el("span", {
+        "class": "diff-host-more",
+        text: "+" + (diff.new_hosts.length - 20) + " more",
+      }));
+    }
+    hostSection.appendChild(hostList);
+    panel.appendChild(hostSection);
+  }
+
+  // New techs list
+  if (diff.new_techs && diff.new_techs.length > 0) {
+    var techSection = el("div", { "class": "diff-techs-section" });
+    techSection.appendChild(el("div", { "class": "diff-section-header" },
+      el("span", { text: "New Technologies on Existing Hosts" })
+    ));
+
+    var maxTechs = Math.min(diff.new_techs.length, 15);
+    var techList = el("div", { "class": "diff-tech-list" });
+    for (var j = 0; j < maxTechs; j++) {
+      var item = diff.new_techs[j];
+      var techItem = el("div", { "class": "diff-tech-item" });
+      techItem.appendChild(el("span", { "class": "diff-tech-name", text: item.tech }));
+      techItem.appendChild(el("span", { "class": "diff-tech-host", text: item.hostname }));
+      techList.appendChild(techItem);
+    }
+    if (diff.new_techs.length > 15) {
+      techList.appendChild(el("span", {
+        "class": "diff-host-more",
+        text: "+" + (diff.new_techs.length - 15) + " more",
+      }));
+    }
+    techSection.appendChild(techList);
+    panel.appendChild(techSection);
+  }
+
+  return panel;
+}
+
+// ============================================================
+// SeverityExportBar(programs) — Quick export by severity
+// ============================================================
+
+function SeverityExportBar(programs) {
+  programs = programs || [];
+
+  var criticalHosts = [];
+  var highHosts = [];
+  var findingsHosts = [];
+
+  for (var i = 0; i < programs.length; i++) {
+    var p = programs[i];
+    var hosts = (p.detections || []).map(function (d) { return d.hostname; });
+    if ((p.critical_count || 0) > 0) criticalHosts = criticalHosts.concat(hosts);
+    if ((p.high_count || 0) > 0) highHosts = highHosts.concat(hosts);
+    if (p.severity && p.severity !== "none" && p.severity !== "info") {
+      findingsHosts = findingsHosts.concat(hosts);
+    }
+  }
+
+  if (criticalHosts.length === 0 && highHosts.length === 0 && findingsHosts.length === 0) {
+    return null;
+  }
+
+  var bar = el("div", {
+    id: "severity-export-bar",
+    "class": "severity-export-bar",
+    "aria-label": "Export hosts by severity",
+  });
+
+  bar.appendChild(el("span", { "class": "severity-export-label", text: "QUICK EXPORT" }));
+
+  if (criticalHosts.length > 0) {
+    var critBtn = el("button", {
+      "class": "btn-sev-export sev-export-critical",
+      type: "button",
+      text: "Critical (" + criticalHosts.length + ")",
+    });
+    critBtn.addEventListener("click", function () {
+      copyToClipboard(criticalHosts.join("\n"), critBtn, "Critical (" + criticalHosts.length + ")", "Copied!");
+    });
+    bar.appendChild(critBtn);
+  }
+
+  if (highHosts.length > 0) {
+    var highBtn = el("button", {
+      "class": "btn-sev-export sev-export-high",
+      type: "button",
+      text: "High (" + highHosts.length + ")",
+    });
+    highBtn.addEventListener("click", function () {
+      copyToClipboard(highHosts.join("\n"), highBtn, "High (" + highHosts.length + ")", "Copied!");
+    });
+    bar.appendChild(highBtn);
+  }
+
+  if (findingsHosts.length > 0) {
+    var findBtn = el("button", {
+      "class": "btn-sev-export sev-export-findings",
+      type: "button",
+      text: "All Findings (" + findingsHosts.length + ")",
+    });
+    findBtn.addEventListener("click", function () {
+      copyToClipboard(findingsHosts.join("\n"), findBtn, "All Findings (" + findingsHosts.length + ")", "Copied!");
+    });
+    bar.appendChild(findBtn);
+  }
+
+  return bar;
+}
+
+// ============================================================
 // Export to window.stackrecon.components
 // ============================================================
 
 window.stackrecon.components = {
-  LoadingSpinner:  LoadingSpinner,
-  EmptyState:      EmptyState,
-  ErrorBanner:     ErrorBanner,
-  TechBadge:       TechBadge,
-  PlatformBadge:   PlatformBadge,
-  RewardBadge:     RewardBadge,
-  ProgramCard:     ProgramCard,
-  CopyAllBanner:   CopyAllBanner,
-  InsightsPanel:   InsightsPanel,
+  LoadingSpinner:     LoadingSpinner,
+  EmptyState:         EmptyState,
+  ErrorBanner:        ErrorBanner,
+  TechBadge:          TechBadge,
+  PlatformBadge:      PlatformBadge,
+  RewardBadge:        RewardBadge,
+  ProgramCard:        ProgramCard,
+  CopyAllBanner:      CopyAllBanner,
+  InsightsPanel:      InsightsPanel,
+  DiffPanel:          DiffPanel,
+  SeverityExportBar:  SeverityExportBar,
 };

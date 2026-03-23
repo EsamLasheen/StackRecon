@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 from scanner.src.classifier import classify_platform, classify_reward_type
 from scanner.src.config import parse_cli_args
 from scanner.src.detector import run_httpx_binary, run_nuclei, run_nuclei_info
+from scanner.src.differ import compute_diff, load_previous_scan
 from scanner.src.fetcher import SourceUnavailableError, fetch_chaos_index
 from scanner.src.writer import write_atomic
 
@@ -58,25 +59,44 @@ def _hostnames_for_program(entry: dict) -> list[str]:
             if host:
                 domains = [host]
 
-    # Focused on subdomains most likely to expose security-relevant services.
-    # Deliberately concise — 800+ programs × many domains × prefixes = huge scan.
+    # Aggressive wordlist targeting security-relevant services.
+    # 800+ programs × domains × prefixes — optimized for real bug discovery.
     prefixes = [
         # Root + common web
         "",
         "www",
         "api",
         "app",
+        "web",
+        "m",
+        "mobile",
         # Auth & admin (highest nuclei hit rate)
         "admin",
         "portal",
         "auth",
         "sso",
         "login",
+        "accounts",
+        "id",
+        "oauth",
+        "my",
+        "panel",
+        "dashboard",
+        "console",
+        "manage",
+        "management",
         # Environments often misconfigured
         "dev",
         "staging",
         "test",
         "beta",
+        "uat",
+        "sandbox",
+        "qa",
+        "preprod",
+        "pre-prod",
+        "demo",
+        "internal",
         # DevOps tools — primary targets for misconfigs
         "jenkins",
         "gitlab",
@@ -86,11 +106,97 @@ def _hostnames_for_program(entry: dict) -> list[str]:
         "confluence",
         "vault",
         "monitor",
-        # Infrastructure
+        "sonarqube",
+        "bamboo",
+        "teamcity",
+        "drone",
+        "ci",
+        "cd",
+        "deploy",
+        "build",
+        "argocd",
+        "harbor",
+        # Databases & search — often exposed without auth
+        "elasticsearch",
+        "elastic",
+        "es",
+        "solr",
+        "redis",
+        "mongo",
+        "mysql",
+        "postgres",
+        "db",
+        "database",
+        "couchdb",
+        "cassandra",
+        "phpmyadmin",
+        "adminer",
+        "pgadmin",
+        # Monitoring & observability
+        "prometheus",
+        "alertmanager",
+        "nagios",
+        "zabbix",
+        "datadog",
+        "newrelic",
+        "apm",
+        "trace",
+        "jaeger",
+        "zipkin",
+        "sentry",
+        # Infrastructure & containers
         "k8s",
+        "kubernetes",
         "docker",
         "registry",
+        "portainer",
+        "rancher",
+        "nomad",
+        "consul",
+        "etcd",
+        "traefik",
+        "proxy",
+        "lb",
+        # Mail & messaging
+        "mail",
+        "smtp",
+        "webmail",
+        "email",
+        "mailhog",
+        "rabbitmq",
+        "kafka",
+        "mq",
+        "queue",
+        # Storage & files
+        "s3",
+        "storage",
+        "cdn",
+        "assets",
+        "files",
+        "uploads",
+        "backup",
+        "minio",
+        "ftp",
+        # Docs & APIs
+        "docs",
+        "swagger",
+        "api-docs",
+        "graphql",
+        "ws",
+        # Security-relevant
+        "vpn",
+        "waf",
+        "debug",
+        "log",
+        "logs",
         "status",
+        "health",
+        # Source code
+        "git",
+        "svn",
+        "repo",
+        "code",
+        "bitbucket",
     ]
 
     for domain in domains:
@@ -207,7 +313,7 @@ async def run(config) -> int:
         },
     )
 
-    raw_detections = run_httpx_binary(
+    raw_detections, all_responding = run_httpx_binary(
         hostnames=all_hostnames,
         threads=config.workers,
         timeout=config.connect_timeout + config.read_timeout,
@@ -216,19 +322,21 @@ async def run(config) -> int:
     detection_map: dict[str, dict] = {d["hostname"]: d for d in raw_detections}
     total_detections = len(raw_detections)
     print(f"httpx finished — {total_detections} hosts with tech detections.")
+    print(f"Total responding hosts: {len(all_responding)}")
 
-    # Run nuclei on hosts that responded (much smaller set)
-    detected_hosts = list(detection_map.keys())
+    # Run nuclei on ALL responding hosts — not just tech-detected ones.
+    # Hosts without detected tech can still have exposed .git, .env, actuator, etc.
+    nuclei_targets = all_responding if all_responding else list(detection_map.keys())
 
     # 1) Vuln scan — real reportable bugs (private only)
-    print(f"Running nuclei vuln scan on {len(detected_hosts)} live hosts…")
+    print(f"Running nuclei vuln scan on {len(nuclei_targets)} responding hosts…")
 
     _write_progress(
         progress_path,
         {
             "status": "scanning",
             "phase": "nuclei_vuln",
-            "phase_label": f"Vulnerability scan — {len(detected_hosts):,} live hosts",
+            "phase_label": f"Vulnerability scan — {len(nuclei_targets):,} responding hosts",
             "phase_number": 3,
             "total_phases": 4,
             "started_at": started_at,
@@ -240,7 +348,7 @@ async def run(config) -> int:
     )
 
     nuclei_findings = run_nuclei(
-        hostnames=detected_hosts,
+        hostnames=nuclei_targets,
         concurrency=config.workers,
         rate_limit=200,
         timeout=10,
@@ -249,7 +357,7 @@ async def run(config) -> int:
     print(f"Nuclei vulns — {len(nuclei_findings)} findings.")
 
     # 2) Info scan — WAF/tech/cloud detection (public site)
-    print(f"Running nuclei info scan on {len(detected_hosts)} live hosts…")
+    print(f"Running nuclei info scan on {len(nuclei_targets)} responding hosts…")
 
     _write_progress(
         progress_path,
@@ -268,7 +376,7 @@ async def run(config) -> int:
     )
 
     nuclei_info = run_nuclei_info(
-        hostnames=detected_hosts,
+        hostnames=nuclei_targets,
         concurrency=config.workers,
         rate_limit=200,
         timeout=10,
@@ -376,6 +484,19 @@ async def run(config) -> int:
         },
         "programs": programs_out,
     }
+
+    # Compute diff against previous scan (new attack surface detection)
+    prev_data = load_previous_scan(config.output)
+    diff = compute_diff(prev_data, data)
+    data["meta"]["diff"] = diff["summary"]
+    data["diff"] = diff
+
+    print("\nChanges since last scan:")
+    print(f"  New programs:  {diff['summary']['new_programs']}")
+    print(f"  New hosts:     {diff['summary']['new_hosts']}")
+    print(f"  New techs:     {diff['summary']['new_techs']}")
+    print(f"  Removed progs: {diff['summary']['removed_programs']}")
+    print(f"  Removed hosts: {diff['summary']['removed_hosts']}")
 
     # Write full private report (includes matched_at URLs, vuln details)
     private_path = config.output.replace(".json", "-full.json")

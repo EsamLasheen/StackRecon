@@ -16,6 +16,8 @@ var PROGRESS_URL = "./data/progress.json";
 var resultsContainer, statsBar, techSelect, platformSelect, rewardSelect, severitySelect, nameInput, clearBtn;
 var copyAllBannerEl;
 var insightsPanelEl;
+var diffPanelEl;
+var sevExportBarEl;
 
 function C(name) { return window.stackrecon.components[name]; }
 function F(name) { return window.stackrecon.filters[name]; }
@@ -275,6 +277,11 @@ function fetchData() {
       var detectionCount = (data.meta && data.meta.total_detections) || totals.detections;
       updateHeaderStats(programCount, detectionCount, totals.techs);
 
+      // Track new programs for NEW badges on cards
+      window.stackrecon._newPrograms = (data.diff && data.diff.new_programs) || [];
+
+      initDiffPanel(data.diff);
+      initSeverityExportBar(window.stackrecon.programs);
       initInsightsPanel(window.stackrecon.programs);
       restoreFiltersFromHash();
       applyFilters();
@@ -350,6 +357,38 @@ function initInsightsPanel(programs) {
     }
   }
   insightsPanelEl = newPanel;
+}
+
+function initDiffPanel(diff) {
+  var newPanel = C("DiffPanel")(diff);
+  var anchor = document.getElementById("stats-bar");
+
+  if (diffPanelEl && diffPanelEl.parentNode) {
+    if (newPanel) {
+      diffPanelEl.parentNode.replaceChild(newPanel, diffPanelEl);
+    } else {
+      diffPanelEl.parentNode.removeChild(diffPanelEl);
+    }
+  } else if (newPanel && anchor && anchor.parentNode) {
+    anchor.parentNode.insertBefore(newPanel, anchor.nextSibling);
+  }
+  diffPanelEl = newPanel;
+}
+
+function initSeverityExportBar(programs) {
+  var newBar = C("SeverityExportBar")(programs);
+  var anchor = diffPanelEl || document.getElementById("stats-bar");
+
+  if (sevExportBarEl && sevExportBarEl.parentNode) {
+    if (newBar) {
+      sevExportBarEl.parentNode.replaceChild(newBar, sevExportBarEl);
+    } else {
+      sevExportBarEl.parentNode.removeChild(sevExportBarEl);
+    }
+  } else if (newBar && anchor && anchor.parentNode) {
+    anchor.parentNode.insertBefore(newBar, anchor.nextSibling);
+  }
+  sevExportBarEl = newBar;
 }
 
 var lastGeneratedAt = null;
