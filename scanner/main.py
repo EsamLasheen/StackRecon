@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime
+import random
 import sys
 from urllib.parse import urlparse
 
@@ -328,6 +329,10 @@ async def run(config) -> int:
     # Hosts without detected tech can still have exposed .git, .env, actuator, etc.
     nuclei_targets = all_responding if all_responding else list(detection_map.keys())
 
+    # Shuffle targets so nuclei doesn't scan alphabetically —
+    # prevents timeout from always cutting off the same programs (Z never scanned).
+    random.shuffle(nuclei_targets)
+
     # 1) Vuln scan — real reportable bugs (private only)
     print(f"Running nuclei vuln scan on {len(nuclei_targets)} responding hosts…")
 
@@ -350,7 +355,7 @@ async def run(config) -> int:
     nuclei_findings = run_nuclei(
         hostnames=nuclei_targets,
         concurrency=config.workers,
-        rate_limit=200,
+        rate_limit=1000,
         timeout=10,
         templates_path=config.templates,
     )
@@ -378,7 +383,7 @@ async def run(config) -> int:
     nuclei_info = run_nuclei_info(
         hostnames=nuclei_targets,
         concurrency=config.workers,
-        rate_limit=200,
+        rate_limit=1000,
         timeout=10,
     )
     print(f"Nuclei info — {len(nuclei_info)} detections.")

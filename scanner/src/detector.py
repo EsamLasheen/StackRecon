@@ -273,7 +273,9 @@ def run_nuclei(
         import threading
         import time as _time
 
-        timeout_sec = 5400  # 90-min hard cap
+        # Scale timeout to host count: ~3 sec/host baseline, min 30 min, max 4 hours
+        timeout_sec = max(1800, min(len(hostnames) * 3, 14400))
+        timed_out = False
         findings: list[dict[str, Any]] = []
 
         proc = subprocess.Popen(
@@ -303,6 +305,7 @@ def run_nuclei(
             while True:
                 remaining = deadline - _time.monotonic()
                 if remaining <= 0:
+                    timed_out = True
                     break
                 try:
                     line = line_queue.get(timeout=min(remaining, 5.0))
@@ -336,6 +339,13 @@ def run_nuclei(
         finally:
             proc.kill()
             proc.wait()
+
+        if timed_out:
+            print(
+                f"[WARN] nuclei vuln scan timed out after {timeout_sec}s "
+                f"— {len(findings)} findings collected (scan incomplete)",
+                file=__import__("sys").stderr,
+            )
 
         return findings
     finally:
@@ -393,7 +403,9 @@ def run_nuclei_info(
         import threading
         import time as _time
 
-        timeout_sec = 3600  # 60-min cap for info scan
+        # Scale timeout to host count: ~2 sec/host baseline, min 30 min, max 3 hours
+        timeout_sec = max(1800, min(len(hostnames) * 2, 10800))
+        timed_out = False
         findings: list[dict[str, Any]] = []
 
         proc = subprocess.Popen(
@@ -422,6 +434,7 @@ def run_nuclei_info(
             while True:
                 remaining = deadline - _time.monotonic()
                 if remaining <= 0:
+                    timed_out = True
                     break
                 try:
                     line = line_queue.get(timeout=min(remaining, 5.0))
@@ -455,6 +468,13 @@ def run_nuclei_info(
         finally:
             proc.kill()
             proc.wait()
+
+        if timed_out:
+            print(
+                f"[WARN] nuclei info scan timed out after {timeout_sec}s "
+                f"— {len(findings)} findings collected (scan incomplete)",
+                file=__import__("sys").stderr,
+            )
 
         return findings
     finally:
