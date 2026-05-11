@@ -1,13 +1,13 @@
 {
   "status": "scanning",
-  "phase": "httpx",
-  "phase_label": "Tech detection — probing 504,792 subdomains",
-  "phase_number": 2,
+  "phase": "nuclei_vuln",
+  "phase_label": "Vulnerability scan — 23,705 responding hosts",
+  "phase_number": 3,
   "total_phases": 4,
   "started_at": "2026-05-11T06:19:57.814108Z",
   "programs_loaded": 798,
   "hostnames_total": 504792,
-  "detections_so_far": 0,
+  "detections_so_far": 21538,
   "vuln_findings": 0,
-  "updated_at": "2026-05-11T06:19:58.150560Z"
+  "updated_at": "2026-05-11T09:52:26.471710Z"
 }
