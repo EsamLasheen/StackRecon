@@ -15,6 +15,9 @@ jobs:
   scan:
     name: Run StackRecon Scanner
     runs-on: ubuntu-latest
+    # Cap below GHA's 6h hard kill so the "Commit results" step
+    # still runs and partial data lands on the dashboard.
+    timeout-minutes: 330
 
     permissions:
       contents: write

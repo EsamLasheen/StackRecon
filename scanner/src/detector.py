@@ -273,8 +273,10 @@ def run_nuclei(
         import threading
         import time as _time
 
-        # Scale timeout to host count: ~3 sec/host baseline, min 30 min, max 4 hours
-        timeout_sec = max(1800, min(len(hostnames) * 3, 14400))
+        # Scale timeout to host count: ~2 sec/host baseline, min 15 min, max 2.5 hours.
+        # Capped so vuln + info phases fit inside GHA's 6h job limit
+        # (vuln 2.5h + info 1.5h + httpx ~30m + setup ~10m ≈ 4.5h).
+        timeout_sec = max(900, min(len(hostnames) * 2, 9000))
         timed_out = False
         findings: list[dict[str, Any]] = []
 
@@ -403,8 +405,9 @@ def run_nuclei_info(
         import threading
         import time as _time
 
-        # Scale timeout to host count: ~2 sec/host baseline, min 30 min, max 3 hours
-        timeout_sec = max(1800, min(len(hostnames) * 2, 10800))
+        # Scale timeout to host count: ~1 sec/host baseline, min 15 min, max 1.5 hours.
+        # Capped so this phase plus the vuln phase fit inside GHA's 6h job limit.
+        timeout_sec = max(900, min(len(hostnames), 5400))
         timed_out = False
         findings: list[dict[str, Any]] = []
 

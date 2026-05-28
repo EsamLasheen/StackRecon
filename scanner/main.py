@@ -6,6 +6,7 @@ import asyncio
 import datetime
 import random
 import sys
+import traceback
 from urllib.parse import urlparse
 
 from scanner.src.classifier import classify_platform, classify_reward_type
@@ -333,6 +334,10 @@ async def run(config) -> int:
     # prevents timeout from always cutting off the same programs (Z never scanned).
     random.shuffle(nuclei_targets)
 
+    # nuclei is memory-hungry; cap concurrency well below httpx workers
+    # to avoid OOM-kills on GHA runners (7GB RAM).
+    nuclei_concurrency = min(config.workers, 50)
+
     # 1) Vuln scan — real reportable bugs (private only)
     print(f"Running nuclei vuln scan on {len(nuclei_targets)} responding hosts…")
 
@@ -352,14 +357,19 @@ async def run(config) -> int:
         },
     )
 
-    nuclei_findings = run_nuclei(
-        hostnames=nuclei_targets,
-        concurrency=config.workers,
-        rate_limit=1000,
-        timeout=10,
-        templates_path=config.templates,
-    )
-    print(f"Nuclei vulns — {len(nuclei_findings)} findings.")
+    try:
+        nuclei_findings = run_nuclei(
+            hostnames=nuclei_targets,
+            concurrency=nuclei_concurrency,
+            rate_limit=1000,
+            timeout=10,
+            templates_path=config.templates,
+        )
+        print(f"Nuclei vulns — {len(nuclei_findings)} findings.")
+    except Exception:
+        print("[ERROR] nuclei vuln scan crashed — continuing with empty findings", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        nuclei_findings = []
 
     # 2) Info scan — WAF/tech/cloud detection (public site)
     print(f"Running nuclei info scan on {len(nuclei_targets)} responding hosts…")
@@ -380,13 +390,18 @@ async def run(config) -> int:
         },
     )
 
-    nuclei_info = run_nuclei_info(
-        hostnames=nuclei_targets,
-        concurrency=config.workers,
-        rate_limit=1000,
-        timeout=10,
-    )
-    print(f"Nuclei info — {len(nuclei_info)} detections.")
+    try:
+        nuclei_info = run_nuclei_info(
+            hostnames=nuclei_targets,
+            concurrency=nuclei_concurrency,
+            rate_limit=1000,
+            timeout=10,
+        )
+        print(f"Nuclei info — {len(nuclei_info)} detections.")
+    except Exception:
+        print("[ERROR] nuclei info scan crashed — continuing with empty findings", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        nuclei_info = []
 
     # Build nuclei lookups: hostname -> list of findings
     nuclei_map: dict[str, list[dict]] = {}
