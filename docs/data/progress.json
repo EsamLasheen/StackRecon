@@ -1,13 +1,13 @@
 {
   "status": "scanning",
-  "phase": "starting",
-  "phase_label": "Scan initializing...",
-  "phase_number": 0,
+  "phase": "httpx",
+  "phase_label": "Tech detection — probing 505,530 subdomains",
+  "phase_number": 2,
   "total_phases": 4,
-  "started_at": "2026-08-24T03:19:31.127032Z",
-  "updated_at": "2026-08-24T03:19:31.127032Z",
-  "programs_loaded": 0,
-  "hostnames_total": 0,
+  "started_at": "2026-08-24T03:19:32.518920Z",
+  "programs_loaded": 802,
+  "hostnames_total": 505530,
   "detections_so_far": 0,
-  "vuln_findings": 0
+  "vuln_findings": 0,
+  "updated_at": "2026-08-24T03:19:32.878623Z"
 }
