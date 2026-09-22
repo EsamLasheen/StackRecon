@@ -6,6 +6,7 @@ import asyncio
 import json
 import re
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -117,6 +118,8 @@ def run_httpx_binary(
     hostnames: list[str],
     threads: int = 50,
     timeout: int = 10,
+    hard_timeout: int = 14400,
+    rate_limit: int | None = None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Run the projectdiscovery/httpx binary with Wappalyzer tech detection.
 
@@ -156,10 +159,12 @@ def run_httpx_binary(
                 "-retries",
                 "0",  # no retries — failed hosts counted once, not twice
                 "-follow-redirects",
+                *(["-rl", str(rate_limit)] if rate_limit is not None else []),
             ],
             capture_output=True,
             text=True,
-            timeout=14400,  # 4-hour hard cap (scan should finish in <30 min)
+            timeout=hard_timeout,
+            check=True,
         )
 
         detections: list[dict[str, Any]] = []
@@ -207,12 +212,25 @@ def run_httpx_binary(
 # ---------------------------------------------------------------------------
 
 
+def _finish_process(proc: subprocess.Popen, finished: bool) -> int:
+    """Reap a child without killing it during normal EOF/exit races."""
+    if not finished:
+        proc.kill()
+    try:
+        return proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+        raise
+
+
 def run_nuclei(
     hostnames: list[str],
     concurrency: int = 50,
     rate_limit: int = 150,
     timeout: int = 10,
     templates_path: str | None = None,
+    strict: bool = False,
 ) -> list[dict[str, Any]]:
     """Run nuclei with misconfiguration/exposure/default-login templates.
 
@@ -267,6 +285,9 @@ def run_nuclei(
             "dos,intrusive,fuzz",
         ]
 
+        if strict:
+            cmd.extend(["-ss", "host-spray"])
+
         # Use threading to read stdout so we can enforce a hard timeout
         # even when nuclei produces no output (blocking readline).
         import queue
@@ -283,7 +304,7 @@ def run_nuclei(
         proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
+            stderr=sys.stderr,
             text=True,
         )
 
@@ -303,6 +324,7 @@ def run_nuclei(
         reader_thread.start()
 
         deadline = _time.monotonic() + timeout_sec
+        finished = False
         try:
             while True:
                 remaining = deadline - _time.monotonic()
@@ -314,6 +336,7 @@ def run_nuclei(
                 except queue.Empty:
                     continue  # check deadline again
                 if line is None:
+                    finished = True
                     break  # nuclei finished naturally
 
                 line = line.strip()
@@ -339,8 +362,12 @@ def run_nuclei(
                 except json.JSONDecodeError:
                     continue
         finally:
-            proc.kill()
-            proc.wait()
+            returncode = _finish_process(proc, finished)
+
+        if strict and (timed_out or returncode != 0):
+            raise RuntimeError(
+                f"Incomplete nuclei vuln phase: timed_out={timed_out}, exit={returncode}"
+            )
 
         if timed_out:
             print(
@@ -359,6 +386,7 @@ def run_nuclei_info(
     concurrency: int = 50,
     rate_limit: int = 150,
     timeout: int = 10,
+    strict: bool = False,
 ) -> list[dict[str, Any]]:
     """Run nuclei with -as (automatic scan) for info-level tech/WAF detection.
 
@@ -401,6 +429,9 @@ def run_nuclei_info(
             "dos,intrusive,fuzz,ssrf",
         ]
 
+        if strict:
+            cmd.extend(["-ss", "host-spray"])
+
         import queue
         import threading
         import time as _time
@@ -414,7 +445,7 @@ def run_nuclei_info(
         proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
+            stderr=sys.stderr,
             text=True,
         )
 
@@ -433,6 +464,7 @@ def run_nuclei_info(
         reader_thread.start()
 
         deadline = _time.monotonic() + timeout_sec
+        finished = False
         try:
             while True:
                 remaining = deadline - _time.monotonic()
@@ -444,6 +476,7 @@ def run_nuclei_info(
                 except queue.Empty:
                     continue
                 if line is None:
+                    finished = True
                     break
 
                 line = line.strip()
@@ -469,8 +502,12 @@ def run_nuclei_info(
                 except json.JSONDecodeError:
                     continue
         finally:
-            proc.kill()
-            proc.wait()
+            returncode = _finish_process(proc, finished)
+
+        if strict and (timed_out or returncode != 0):
+            raise RuntimeError(
+                f"Incomplete nuclei info phase: timed_out={timed_out}, exit={returncode}"
+            )
 
         if timed_out:
             print(
