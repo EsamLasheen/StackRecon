@@ -2,38 +2,72 @@ name: Weekly Scan
 
 on:
   schedule:
-    # Every Monday at 02:00 UTC
     - cron: "0 2 * * 1"
   workflow_dispatch:
-    inputs:
-      limit:
-        description: "Max programs to scan (leave empty for all ~800)"
-        required: false
-        default: ""
+
+# Keep scan publications in order, including manual recovery runs.
+concurrency:
+  group: weekly-scan
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  SHARD_COUNT: "16"
 
 jobs:
-  scan:
-    name: Run StackRecon Scanner
+  prepare:
     runs-on: ubuntu-latest
-    # Cap below GHA's 6h hard kill so the "Commit results" step
-    # still runs and partial data lands on the dashboard.
-    timeout-minutes: 330
-
-    permissions:
-      contents: write
-
+    timeout-minutes: 15
+    outputs:
+      shards: ${{ steps.matrix.outputs.shards }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
+      - run: pip install -r scanner/requirements.txt
+      - name: Freeze all programs
+        run: python3 -m scanner.shards prepare --index scan-index.json
+      - id: matrix
+        run: |
+          python3 - <<'PYTHON'
+          import json, os
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write("shards=" + json.dumps(list(range(int(os.environ["SHARD_COUNT"])))))
+              f.write("\n")
+          PYTHON
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scan-index
+          path: scan-index.json
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
 
-      - name: Install Python dependencies
-        run: pip install -r scanner/requirements.txt
-
+  scan:
+    name: Scan shard ${{ matrix.shard }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    # Strict phase limits total at most 300 minutes, leaving setup/cleanup time.
+    timeout-minutes: 330
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        shard: ${{ fromJSON(needs.prepare.outputs.shards) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r scanner/requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          name: scan-index
       - name: Install httpx binary
         run: |
           go install github.com/projectdiscovery/httpx/cmd/httpx@latest
@@ -70,92 +104,103 @@ jobs:
           echo "Categorized templates: $(find categorized_templates -name '*.yaml' | wc -l)"
           echo "Categories: $(ls categorized_templates | tr '\n' ', ')"
 
-      - name: Configure git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Mark scan started
-        run: |
-          python3 -c "
-          import json, datetime, os
-          now = datetime.datetime.utcnow().isoformat() + 'Z'
-          os.makedirs('docs/data', exist_ok=True)
-          progress = {
-            'status': 'scanning',
-            'phase': 'starting',
-            'phase_label': 'Scan initializing...',
-            'phase_number': 0,
-            'total_phases': 4,
-            'started_at': now,
-            'updated_at': now,
-            'programs_loaded': 0,
-            'hostnames_total': 0,
-            'detections_so_far': 0,
-            'vuln_findings': 0,
-          }
-          with open('docs/data/progress.json', 'w') as f:
-              json.dump(progress, f, indent=2)
-          "
-          git add docs/data/progress.json
-          git diff --cached --quiet || git commit -m "scan: started [skip ci]"
-          git push
-
       - name: Run scanner
+        env:
+          SHARD_INDEX: ${{ matrix.shard }}
         run: |
-          # Background process: push progress.json every 5 minutes during scan.
-          # Pull BEFORE add/commit so we never push to a diverged branch.
-          (while true; do
-            sleep 300
-            if [ -f docs/data/progress.json ]; then
-              git pull --rebase origin main || true
-              git add docs/data/progress.json
-              git diff --cached --quiet || {
-                git commit -m "scan: progress update [skip ci]"
-                git push || true
-              }
-            fi
-          done) &
-          PUSHER_PID=$!
-
-          LIMIT="${{ github.event.inputs.limit }}"
-          LIMIT_ARGS=""
-          if [ -n "$LIMIT" ]; then
-            # Validate: must be a plain integer to prevent shell injection
-            if echo "$LIMIT" | grep -qE '^[0-9]+$'; then
-              LIMIT_ARGS="--limit $LIMIT"
-            else
-              echo "[WARN] Ignoring non-numeric limit value: $LIMIT"
-            fi
-          fi
-
-          python3 -m scanner.main \
-            $LIMIT_ARGS \
-            --workers 300 \
-            --connect-timeout 1 \
-            --read-timeout 3 \
-            --output docs/data/data.json \
+          httpx -version
+          nuclei -version
+          free -m
+          df -h /
+          vmstat 60 &
+          MONITOR_PID=$!
+          trap 'kill "$MONITOR_PID" 2>/dev/null || true' EXIT
+          /usr/bin/time -v python3 -u -m scanner.main \
+            --program-index scan-index.json \
+            --shard-index "$SHARD_INDEX" --shard-count "$SHARD_COUNT" --strict \
+            --workers 75 --connect-timeout 1 --read-timeout 3 \
+            --output results/data.json \
             --templates /tmp/nuclei-collection/categorized_templates \
-            --progress docs/data/progress.json
+            --progress results/progress.json
+      - name: Save completed shard
+        uses: actions/upload-artifact@v4
+        with:
+          name: scan-shard-${{ matrix.shard }}
+          path: results/data-full.json
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
 
-          kill $PUSHER_PID 2>/dev/null || true
-
-      - name: Upload full report (private — only repo owner can download)
+  publish:
+    needs: [prepare, scan]
+    if: ${{ always() && !cancelled() && needs.prepare.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r scanner/requirements.txt
+      - uses: actions/download-artifact@v4
+        if: ${{ needs.scan.result == 'success' }}
+        with:
+          name: scan-index
+      - uses: actions/download-artifact@v4
+        if: ${{ needs.scan.result == 'success' }}
+        with:
+          pattern: scan-shard-*
+          path: shards
+      - name: Validate and merge every shard
+        id: merge
+        if: ${{ needs.scan.result == 'success' }}
+        run: |
+          python3 -m scanner.shards merge \
+            --index scan-index.json --count "$SHARD_COUNT" --directory shards \
+            --output docs/data/data.json --progress docs/data/progress.json
+      - name: Upload full report
+        id: full_report
+        if: ${{ steps.merge.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: stackrecon-full-report-${{ github.run_id }}
           path: docs/data/data-full.json
           retention-days: 90
-          if-no-files-found: warn
-
-      - name: Commit results
+          if-no-files-found: error
+          overwrite: true
+      - name: Preserve last complete data on failure
+        if: ${{ failure() || needs.scan.result != 'success' }}
         run: |
-          git add -f docs/data/data.json docs/data/progress.json
-          git diff --cached --quiet && echo "No changes to commit" || \
-            git commit -m "data: weekly scan results [$(date -u '+%Y-%m-%d')]"
-          # Rebase onto any progress commits the background pusher made.
-          # -X theirs: on conflict prefer our scan data (the replayed commit).
-          # GIT_EDITOR=true: prevents git from opening an interactive editor
-          # in CI if it ever needs one (would hang the runner otherwise).
-          GIT_EDITOR=true git pull --rebase -X theirs origin main
-          git push
+          git restore docs/data/data.json
+          python3 - <<'PYTHON'
+          import json, datetime
+          from pathlib import Path
+          path = Path("docs/data/progress.json")
+          progress = json.loads(path.read_text()) if path.exists() else {}
+          progress.update(status="error", phase="failed",
+                          phase_label="Scan incomplete; last complete results retained",
+                          updated_at=datetime.datetime.now(datetime.timezone.utc).isoformat())
+          path.write_text(json.dumps(progress, indent=2))
+          PYTHON
+      - name: Commit scan status and validated data
+        if: ${{ !cancelled() && github.ref == 'refs/heads/main' }}
+        env:
+          MERGE_RESULT: ${{ steps.merge.outcome }}
+          REPORT_RESULT: ${{ steps.full_report.outcome }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/data/progress.json
+          if [ "$MERGE_RESULT" = success ] && [ "$REPORT_RESULT" = success ]; then
+            git add docs/data/data.json
+          fi
+          if ! git diff --cached --quiet; then
+            git commit -m "data: weekly scan status [skip ci]"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
