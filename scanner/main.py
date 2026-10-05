@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import datetime
+import hashlib
+import json
 import random
 import sys
 import traceback
+from pathlib import Path
 from urllib.parse import urlparse
 
 from scanner.src.classifier import classify_platform, classify_reward_type
@@ -235,7 +238,11 @@ async def run(config) -> int:
 
     print("Fetching Chaos program index…")
     try:
-        index = await fetch_chaos_index(api_key=config.api_key, limit=config.limit)
+        if config.program_index:
+            index_bytes = Path(config.program_index).read_bytes()
+            index = json.loads(index_bytes)
+        else:
+            index = await fetch_chaos_index(api_key=config.api_key, limit=config.limit)
     except SourceUnavailableError as exc:
         print(f"[ERROR] {exc} — aborting", file=sys.stderr)
         _write_progress(
@@ -276,6 +283,8 @@ async def run(config) -> int:
         platform = classify_platform(url)
         reward_type = classify_reward_type(bounty=bounty, url=url)
         hostnames = _hostnames_for_program(entry)
+        if config.strict and not hostnames:
+            raise ValueError(f"Program has no scannable hostnames: {name}")
 
         program_meta.append(
             {
@@ -293,6 +302,11 @@ async def run(config) -> int:
                 all_hostnames.append(h)
                 seen.add(h)
 
+    if config.strict and (not index or any(meta is None for meta in program_meta)):
+        raise ValueError("The full program index must be nonempty and scannable")
+    # Every job uses the same frozen index and disjoint slices of its unique hosts.
+    # Keep all program metadata so the merger can reconstruct the original report.
+    all_hostnames = all_hostnames[config.shard_index :: config.shard_count]
     total_probed = len(all_hostnames)
     print(
         f"Running httpx tech-detect on {total_probed} unique hostnames "
@@ -319,6 +333,8 @@ async def run(config) -> int:
         hostnames=all_hostnames,
         threads=config.workers,
         timeout=config.connect_timeout + config.read_timeout,
+        hard_timeout=3600 if config.strict else 14400,
+        rate_limit=37 if config.strict else None,
     )
 
     detection_map: dict[str, dict] = {d["hostname"]: d for d in raw_detections}
@@ -334,9 +350,9 @@ async def run(config) -> int:
     # prevents timeout from always cutting off the same programs (Z never scanned).
     random.shuffle(nuclei_targets)
 
-    # nuclei is memory-hungry; cap concurrency well below httpx workers
-    # to avoid OOM-kills on GHA runners (7GB RAM).
-    nuclei_concurrency = min(config.workers, 50)
+    # Four strict CI jobs stay within the old aggregate request-rate budget.
+    nuclei_concurrency = min(config.workers, 10 if config.strict else 50)
+    nuclei_rate_limit = 250 if config.strict else 1000
 
     # 1) Vuln scan — real reportable bugs (private only)
     print(f"Running nuclei vuln scan on {len(nuclei_targets)} responding hosts…")
@@ -361,12 +377,15 @@ async def run(config) -> int:
         nuclei_findings = run_nuclei(
             hostnames=nuclei_targets,
             concurrency=nuclei_concurrency,
-            rate_limit=1000,
+            rate_limit=nuclei_rate_limit,
             timeout=10,
             templates_path=config.templates,
+            strict=config.strict,
         )
         print(f"Nuclei vulns — {len(nuclei_findings)} findings.")
     except Exception:
+        if config.strict:
+            raise
         print("[ERROR] nuclei vuln scan crashed — continuing with empty findings", file=sys.stderr)
         traceback.print_exc(file=sys.stderr)
         nuclei_findings = []
@@ -394,11 +413,14 @@ async def run(config) -> int:
         nuclei_info = run_nuclei_info(
             hostnames=nuclei_targets,
             concurrency=nuclei_concurrency,
-            rate_limit=1000,
+            rate_limit=nuclei_rate_limit,
             timeout=10,
+            strict=config.strict,
         )
         print(f"Nuclei info — {len(nuclei_info)} detections.")
     except Exception:
+        if config.strict:
+            raise
         print("[ERROR] nuclei info scan crashed — continuing with empty findings", file=sys.stderr)
         traceback.print_exc(file=sys.stderr)
         nuclei_info = []
@@ -504,6 +526,14 @@ async def run(config) -> int:
         },
         "programs": programs_out,
     }
+    if config.program_index and config.strict:
+        data["meta"]["shard"] = {
+            "index": config.shard_index,
+            "count": config.shard_count,
+            "index_sha256": hashlib.sha256(index_bytes).hexdigest(),
+            "complete": True,
+            "started_at": started_at,
+        }
 
     # Compute diff against previous scan (new attack surface detection)
     prev_data = load_previous_scan(config.output)
@@ -524,6 +554,8 @@ async def run(config) -> int:
         write_atomic(data, private_path)
         print(f"Full report (private): {private_path}")
     except OSError as exc:
+        if config.strict:
+            raise
         print(f"[WARN] Failed to write private report: {exc}", file=sys.stderr)
 
     # Strip vuln details for public data.json — keep info findings (safe)
