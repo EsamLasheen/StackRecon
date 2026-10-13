@@ -31,7 +31,7 @@ Every Monday, a GitHub Actions workflow:
 - **Custom nuclei templates** from the community for real vulnerability detection
 - **Severity scoring** — programs ranked by actual findings
 - **25 subdomain prefixes** targeting `admin.`, `api.`, `grafana.`, `jenkins.`, `k8s.`, `vault.`, `gitlab.`, and more
-- **Live scan progress bar** — see the scan running in real time on the dashboard
+- **Scan status** — failed batches retain the last complete dashboard results
 - **5 combinable filters** — tech stack, platform, reward type, severity, name
 - **One-click subdomain copy** — filter by technology, copy all matching hosts
 - **Shareable filter links** — state saved in URL hash
@@ -78,6 +78,30 @@ python3 -m scanner.main \
 | `--output PATH` | `docs/data/data.json` | Output file |
 | `--connect-timeout S` | 3 | TCP connect timeout |
 | `--read-timeout S` | 7 | HTTP read timeout |
+| `--program-index PATH` | none | Frozen program list shared by scan jobs |
+| `--shard-index N` | 0 | Zero-based hostname batch |
+| `--shard-count N` | 1 | Number of disjoint hostname batches |
+| `--strict` | off | Reject failed or timed-out phases; required for batches |
+
+### Weekly scan recovery
+
+The workflow freezes the complete program index once, then divides its unique hostnames
+across 16 jobs (at most four running together). No program limit is applied. Each job uses
+75 httpx workers at 37 requests/second and Nuclei host-spray with concurrency/bulk size 10
+at 250 requests/second. Strict phase budgets are one hour for httpx, up to 150 minutes for
+Nuclei vulnerabilities, and up to 90 minutes for Nuclei information gathering.
+
+Only the publisher writes to the repository. It validates every batch against the same
+index, merges results, and computes the dashboard diff once. A missing, failed, or timed-out
+batch blocks data publication. Re-run failed jobs to retry their complete batches; there
+is no per-target resume. Batch artifacts are retained for seven days. Full report artifacts
+follow the repository's access controls; they are not owner-only in a public repository.
+
+The initial 16-job setting needs confirmation with a full run. Version output, periodic
+resource samples, and process resource summaries are logged for diagnosis. The workflow
+still uses the existing tool/template sources; it does not pin a speculative replacement
+version. Dashboard progress is published at completion or failure, rather than from each
+batch while it runs.
 
 ---
 

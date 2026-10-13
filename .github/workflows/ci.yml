@@ -24,10 +24,10 @@ jobs:
         run: pip install -r scanner/requirements.txt
 
       - name: Lint with ruff
-        run: ruff check scanner/src/ scanner/main.py
+        run: ruff check scanner/src/ scanner/main.py scanner/shards.py
 
       - name: Format check with black
-        run: black --check scanner/src/ scanner/main.py
+        run: black --check scanner/src/ scanner/main.py scanner/shards.py
 
       - name: Run unit tests with coverage
         run: |
