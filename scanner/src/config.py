@@ -18,6 +18,10 @@ class ScanConfig:
     api_key: str | None = None
     templates: str | None = None
     progress: str | None = None
+    program_index: str | None = None
+    shard_index: int = 0
+    shard_count: int = 1
+    strict: bool = False
 
 
 def _validate_range(
@@ -99,6 +103,11 @@ def parse_cli_args(args: list[str] | None = None) -> ScanConfig:
         help="Path to write live progress JSON (e.g. docs/data/progress.json)",
     )
 
+    parser.add_argument("--program-index", help="Frozen program index shared by all scan jobs")
+    parser.add_argument("--shard-index", type=int, default=0)
+    parser.add_argument("--shard-count", type=int, default=1)
+    parser.add_argument("--strict", action="store_true", help="Fail on incomplete scan phases")
+
     parsed = parser.parse_args(args)
 
     _validate_range(parser, parsed.workers, 1, 500, "workers")
@@ -106,6 +115,12 @@ def parse_cli_args(args: list[str] | None = None) -> ScanConfig:
     _validate_range(parser, parsed.read_timeout, 1, 60, "read-timeout")
     if parsed.limit is not None and parsed.limit < 1:
         parser.error("--limit must be ≥ 1")
+    _validate_range(parser, parsed.shard_count, 1, 256, "shard-count")
+    _validate_range(parser, parsed.shard_index, 0, parsed.shard_count - 1, "shard-index")
+    if parsed.shard_count > 1 and not (parsed.program_index and parsed.strict):
+        parser.error("sharded scans require --program-index and --strict")
+    if parsed.program_index and parsed.limit is not None:
+        parser.error("--limit cannot truncate a frozen program index")
 
     return ScanConfig(
         workers=parsed.workers,
@@ -116,4 +131,8 @@ def parse_cli_args(args: list[str] | None = None) -> ScanConfig:
         api_key=parsed.api_key,
         templates=parsed.templates,
         progress=parsed.progress,
+        program_index=parsed.program_index,
+        shard_index=parsed.shard_index,
+        shard_count=parsed.shard_count,
+        strict=parsed.strict,
     )
