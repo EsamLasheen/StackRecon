@@ -1,13 +1,13 @@
 {
   "status": "scanning",
-  "phase": "nuclei_vuln",
-  "phase_label": "Vulnerability scan — 23,626 responding hosts",
-  "phase_number": 3,
+  "phase": "starting",
+  "phase_label": "Scan initializing...",
+  "phase_number": 0,
   "total_phases": 4,
-  "started_at": "2026-10-19T07:44:26.669985Z",
-  "programs_loaded": 802,
-  "hostnames_total": 505530,
-  "detections_so_far": 21397,
-  "vuln_findings": 0,
-  "updated_at": "2026-10-19T11:18:35.355534Z"
+  "started_at": "2026-11-02T09:19:48.636179Z",
+  "updated_at": "2026-11-02T09:19:48.636179Z",
+  "programs_loaded": 0,
+  "hostnames_total": 0,
+  "detections_so_far": 0,
+  "vuln_findings": 0
 }
